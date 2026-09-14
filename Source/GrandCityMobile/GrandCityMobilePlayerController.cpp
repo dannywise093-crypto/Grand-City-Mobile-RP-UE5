@@ -1,6 +1,9 @@
 #include "GrandCityMobilePlayerController.h"
 
 #include "GrandCityPlayerProfileComponent.h"
+#include "GrandCityMobileAuthWidget.h"
+#include "GrandCityMobileAccountClientSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "GameFramework/Pawn.h"
 
 AGrandCityMobilePlayerController::AGrandCityMobilePlayerController()
@@ -16,6 +19,21 @@ void AGrandCityMobilePlayerController::BeginPlay()
     if (IsLocalController())
     {
         ClientInitializeSession();
+
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (UGrandCityMobileAccountClientSubsystem* AccountClient = GI->GetSubsystem<UGrandCityMobileAccountClientSubsystem>())
+            {
+                if (!AccountClient->IsAuthenticated())
+                {
+                    AuthWidget = CreateWidget<UGrandCityMobileAuthWidget>(this, UGrandCityMobileAuthWidget::StaticClass());
+                    if (AuthWidget)
+                    {
+                        AuthWidget->AddToViewport(1000);
+                    }
+                }
+            }
+        }
     }
 }
 
