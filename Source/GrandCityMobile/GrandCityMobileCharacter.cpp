@@ -3,10 +3,14 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/InputComponent.h"
+#include "Net/UnrealNetwork.h"
 
 AGrandCityMobileCharacter::AGrandCityMobileCharacter()
 {
     PrimaryActorTick.bCanEverTick = true;
+
+    bReplicates = true;
+    SetReplicateMovement(true);
 
     CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
     CameraBoom->SetupAttachment(RootComponent);
@@ -21,6 +25,7 @@ AGrandCityMobileCharacter::AGrandCityMobileCharacter()
     GetCharacterMovement()->bOrientRotationToMovement = true;
     GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
     GetCharacterMovement()->BrakingDecelerationWalking = 1800.0f;
+    GetCharacterMovement()->bUseControllerDesiredRotation = false;
 }
 
 void AGrandCityMobileCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -35,6 +40,12 @@ void AGrandCityMobileCharacter::SetupPlayerInputComponent(UInputComponent* Playe
     PlayerInputComponent->BindAction(TEXT("Jump"), IE_Released, this, &ACharacter::StopJumping);
     PlayerInputComponent->BindAction(TEXT("Sprint"), IE_Pressed, this, &AGrandCityMobileCharacter::StartSprint);
     PlayerInputComponent->BindAction(TEXT("Sprint"), IE_Released, this, &AGrandCityMobileCharacter::StopSprint);
+}
+
+void AGrandCityMobileCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    DOREPLIFETIME(AGrandCityMobileCharacter, bIsSprinting);
 }
 
 void AGrandCityMobileCharacter::MoveForward(float Value)
@@ -67,10 +78,55 @@ void AGrandCityMobileCharacter::LookUp(float Value)
 
 void AGrandCityMobileCharacter::StartSprint()
 {
-    GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+    if (bIsSprinting)
+    {
+        return;
+    }
+
+    if (HasAuthority())
+    {
+        bIsSprinting = true;
+        ApplyMovementSpeed();
+    }
+    else
+    {
+        ServerSetSprinting(true);
+    }
 }
 
 void AGrandCityMobileCharacter::StopSprint()
 {
-    GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+    if (!bIsSprinting)
+    {
+        return;
+    }
+
+    if (HasAuthority())
+    {
+        bIsSprinting = false;
+        ApplyMovementSpeed();
+    }
+    else
+    {
+        ServerSetSprinting(false);
+    }
+}
+
+void AGrandCityMobileCharacter::ServerSetSprinting_Implementation(bool bNewSprinting)
+{
+    bIsSprinting = bNewSprinting;
+    ApplyMovementSpeed();
+}
+
+void AGrandCityMobileCharacter::OnRep_Sprinting()
+{
+    ApplyMovementSpeed();
+}
+
+void AGrandCityMobileCharacter::ApplyMovementSpeed()
+{
+    if (UCharacterMovementComponent* MovementComponent = GetCharacterMovement())
+    {
+        MovementComponent->MaxWalkSpeed = bIsSprinting ? SprintSpeed : WalkSpeed;
+    }
 }
