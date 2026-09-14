@@ -3,6 +3,16 @@
 #include "GrandCityMobilePlayerState.h"
 #include "GrandCityPlayerPersistenceSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "GameFramework/PlayerController.h"
+
+namespace
+{
+    AGrandCityMobilePlayerState* GetOwningPlayerState(const UGrandCityPlayerProfileComponent* Component)
+    {
+        const APlayerController* PlayerController = Cast<APlayerController>(Component ? Component->GetOwner() : nullptr);
+        return PlayerController ? PlayerController->GetPlayerState<AGrandCityMobilePlayerState>() : nullptr;
+    }
+}
 
 UGrandCityPlayerProfileComponent::UGrandCityPlayerProfileComponent()
 {
@@ -11,7 +21,7 @@ UGrandCityPlayerProfileComponent::UGrandCityPlayerProfileComponent()
 
 bool UGrandCityPlayerProfileComponent::LoadProfile()
 {
-    AGrandCityMobilePlayerState* PlayerState = Cast<AGrandCityMobilePlayerState>(GetOwner() ? GetOwner()->GetInstigatorController() ? GetOwner()->GetInstigatorController()->PlayerState : nullptr : nullptr);
+    AGrandCityMobilePlayerState* PlayerState = GetOwningPlayerState(this);
     if (!PlayerState || PlayerState->AccountId.IsEmpty())
     {
         return false;
@@ -58,7 +68,7 @@ bool UGrandCityPlayerProfileComponent::SaveProfile()
 
 void UGrandCityPlayerProfileComponent::ApplyProfileToPlayerState()
 {
-    AGrandCityMobilePlayerState* PlayerState = Cast<AGrandCityMobilePlayerState>(GetOwner() ? GetOwner()->GetInstigatorController() ? GetOwner()->GetInstigatorController()->PlayerState : nullptr : nullptr);
+    AGrandCityMobilePlayerState* PlayerState = GetOwningPlayerState(this);
     if (!PlayerState)
     {
         return;
@@ -72,7 +82,7 @@ void UGrandCityPlayerProfileComponent::ApplyProfileToPlayerState()
 
 void UGrandCityPlayerProfileComponent::CaptureProfileFromPlayerState()
 {
-    AGrandCityMobilePlayerState* PlayerState = Cast<AGrandCityMobilePlayerState>(GetOwner() ? GetOwner()->GetInstigatorController() ? GetOwner()->GetInstigatorController()->PlayerState : nullptr : nullptr);
+    AGrandCityMobilePlayerState* PlayerState = GetOwningPlayerState(this);
     if (!PlayerState)
     {
         return;
