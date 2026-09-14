@@ -6,6 +6,7 @@
 
 class AController;
 class APlayerController;
+class AGrandCityMobilePlayerController;
 
 UCLASS()
 class GRANDCITYMOBILE_API AGrandCityMobileGameMode : public AGameModeBase
@@ -26,6 +27,7 @@ private:
     void UpdateOnlinePlayerCount();
     void SaveAllPlayerProfiles();
     void HandleProfileLoaded(APlayerController* Player, bool bSuccess);
+    void RejectUnauthenticatedPlayer(AGrandCityMobilePlayerController* Player, const FString& Reason);
 
     FTimerHandle ProfileCheckpointTimer;
     TSet<AController*> ProfileReadyPlayers;
