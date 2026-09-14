@@ -1,0 +1,10 @@
+services:
+  master-router:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      PORT: 8090
+      INTERNAL_API_KEY: ${MASTER_ROUTER_API_KEY:?set MASTER_ROUTER_API_KEY}
+      HEARTBEAT_TIMEOUT_MS: 15000
+    restart: unless-stopped
