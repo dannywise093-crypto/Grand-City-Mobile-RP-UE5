@@ -4,6 +4,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GrandCityMobilePlayerController.generated.h"
 
+class UGrandCityPlayerProfileComponent;
+
 UCLASS()
 class GRANDCITYMOBILE_API AGrandCityMobilePlayerController : public APlayerController
 {
@@ -11,6 +13,9 @@ class GRANDCITYMOBILE_API AGrandCityMobilePlayerController : public APlayerContr
 
 public:
     AGrandCityMobilePlayerController();
+
+    bool LoadPersistentProfile();
+    bool SavePersistentProfile();
 
 protected:
     virtual void BeginPlay() override;
@@ -29,4 +34,8 @@ public:
 
     UPROPERTY(BlueprintReadOnly, Category="Grand City|Session")
     bool bSpawnConfirmed = false;
+
+private:
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Grand City|Persistence", meta=(AllowPrivateAccess="true"))
+    TObjectPtr<UGrandCityPlayerProfileComponent> PlayerProfileComponent;
 };
