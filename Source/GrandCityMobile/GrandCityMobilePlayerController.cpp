@@ -35,14 +35,26 @@ void AGrandCityMobilePlayerController::OnUnPossess()
     Super::OnUnPossess();
 }
 
-bool AGrandCityMobilePlayerController::LoadPersistentProfile()
+void AGrandCityMobilePlayerController::LoadPersistentProfile(FGrandCityProfileComponentLoadResult Callback)
 {
-    return HasAuthority() && PlayerProfileComponent && PlayerProfileComponent->LoadProfile();
+    if (!HasAuthority() || !PlayerProfileComponent)
+    {
+        Callback(false);
+        return;
+    }
+
+    PlayerProfileComponent->LoadProfile(MoveTemp(Callback));
 }
 
-bool AGrandCityMobilePlayerController::SavePersistentProfile()
+void AGrandCityMobilePlayerController::SavePersistentProfile(FGrandCityProfileComponentSaveResult Callback)
 {
-    return HasAuthority() && PlayerProfileComponent && PlayerProfileComponent->SaveProfile();
+    if (!HasAuthority() || !PlayerProfileComponent)
+    {
+        Callback(false);
+        return;
+    }
+
+    PlayerProfileComponent->SaveProfile(MoveTemp(Callback));
 }
 
 void AGrandCityMobilePlayerController::ClientInitializeSession_Implementation()
