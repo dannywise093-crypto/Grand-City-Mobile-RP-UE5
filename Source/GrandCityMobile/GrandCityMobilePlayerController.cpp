@@ -75,27 +75,37 @@ void AGrandCityMobilePlayerController::TravelToBestWorldwideServer()
 
     UGameInstance* GI = GetGameInstance();
     UGrandCityGlobalRoutingSubsystem* Router = GI ? GI->GetSubsystem<UGrandCityGlobalRoutingSubsystem>() : nullptr;
-    if (!Router)
+    UGrandCityMobileAccountClientSubsystem* AccountClient = GI ? GI->GetSubsystem<UGrandCityMobileAccountClientSubsystem>() : nullptr;
+    if (!Router || !AccountClient)
     {
-        UE_LOG(LogTemp, Error, TEXT("Global routing service unavailable; refusing fallback travel."));
+        UE_LOG(LogTemp, Error, TEXT("Global routing or account service unavailable; refusing fallback travel."));
         return;
     }
 
-    Router->FindBestServer(TMap<FString, int32>(), [this](const FGrandCityRouteResult& Route)
+    Router->FindBestServer(TMap<FString, int32>(), [this, AccountClient](const FGrandCityRouteResult& Route)
     {
-        if (!Route.bSuccess || Route.Endpoint.IsEmpty())
+        if (!Route.bSuccess || Route.Endpoint.IsEmpty() || Route.ServerId.IsEmpty())
         {
             UE_LOG(LogTemp, Error, TEXT("Worldwide routing failed: %s"), *Route.Error);
             return;
         }
 
-        FString TravelURL = Route.Endpoint + TEXT("?AuthToken=") + FGenericPlatformHttp::UrlEncode(AuthToken);
-        if (!TransferToken.IsEmpty())
+        AccountClient->RequestConnectionTicket(Route.ServerId, [this, Route](bool bTicketSuccess, const FString& Ticket, const FString& ErrorCode)
         {
-            TravelURL += TEXT("&TransferToken=") + FGenericPlatformHttp::UrlEncode(TransferToken);
-        }
+            if (!bTicketSuccess || Ticket.IsEmpty())
+            {
+                UE_LOG(LogTemp, Error, TEXT("Connection ticket request failed: %s"), *ErrorCode);
+                return;
+            }
 
-        ClientTravel(TravelURL, TRAVEL_Absolute);
+            FString TravelURL = Route.Endpoint + TEXT("?ConnectionTicket=") + FGenericPlatformHttp::UrlEncode(Ticket);
+            if (!TransferToken.IsEmpty())
+            {
+                TravelURL += TEXT("&TransferToken=") + FGenericPlatformHttp::UrlEncode(TransferToken);
+            }
+
+            ClientTravel(TravelURL, TRAVEL_Absolute);
+        });
     });
 }
 
@@ -137,16 +147,18 @@ void AGrandCityMobilePlayerController::SavePersistentProfile(FGrandCityProfileCo
     PlayerProfileComponent->SaveProfile(MoveTemp(Callback));
 }
 
-void AGrandCityMobilePlayerController::SetAuthCredentials(const FString& InAuthToken, const FString& InTransferToken)
+void AGrandCityMobilePlayerController::SetAuthCredentials(const FString& InAuthToken, const FString& InTransferToken, const FString& InConnectionTicket)
 {
     AuthToken = InAuthToken;
     TransferToken = InTransferToken;
+    ConnectionTicket = InConnectionTicket;
 }
 
 void AGrandCityMobilePlayerController::ClearAuthCredentials()
 {
     AuthToken.Reset();
     TransferToken.Reset();
+    ConnectionTicket.Reset();
 }
 
 void AGrandCityMobilePlayerController::ClientInitializeSession_Implementation()
