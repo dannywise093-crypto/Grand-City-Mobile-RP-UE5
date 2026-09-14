@@ -57,6 +57,18 @@ void AGrandCityMobilePlayerController::SavePersistentProfile(FGrandCityProfileCo
     PlayerProfileComponent->SaveProfile(MoveTemp(Callback));
 }
 
+void AGrandCityMobilePlayerController::SetAuthCredentials(const FString& InAuthToken, const FString& InTransferToken)
+{
+    AuthToken = InAuthToken;
+    TransferToken = InTransferToken;
+}
+
+void AGrandCityMobilePlayerController::ClearAuthCredentials()
+{
+    AuthToken.Reset();
+    TransferToken.Reset();
+}
+
 void AGrandCityMobilePlayerController::ClientInitializeSession_Implementation()
 {
     bSessionInitialized = true;
