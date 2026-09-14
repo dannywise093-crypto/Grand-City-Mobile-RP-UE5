@@ -20,7 +20,7 @@ const regions = new Map([
   ['NORTH_AMERICA_EAST', { regionId:'NORTH_AMERICA_EAST', continent:'North America', endpoint:'gc-na-east', healthy:false, state:'OFFLINE', players:0, capacity:100, latencyHintMs:210 }],
   ['NORTH_AMERICA_WEST', { regionId:'NORTH_AMERICA_WEST', continent:'North America', endpoint:'gc-na-west', healthy:false, state:'OFFLINE', players:0, capacity:100, latencyHintMs:250 }],
   ['SOUTH_AMERICA_EAST', { regionId:'SOUTH_AMERICA_EAST', continent:'South America', endpoint:'gc-sa-east', healthy:false, state:'OFFLINE', players:0, capacity:100, latencyHintMs:180 }],
-  ['SOUTH_AMERICA_WEST', { regionId:'SOUTH_AMERICA_WEST', continent:'South America', endpoint:'gc-sa-west', healthy:false, state:'OFFLINE', players:0, latencyHintMs:220 }],
+  ['SOUTH_AMERICA_WEST', { regionId:'SOUTH_AMERICA_WEST', continent:'South America', endpoint:'gc-sa-west', healthy:false, state:'OFFLINE', players:0, capacity:100, latencyHintMs:220 }],
   ['MIDDLE_EAST', { regionId:'MIDDLE_EAST', continent:'Middle East', endpoint:'gc-middle-east', healthy:false, state:'OFFLINE', players:0, capacity:100, latencyHintMs:170 }],
   ['OCEANIA', { regionId:'OCEANIA', continent:'Oceania', endpoint:'gc-oceania', healthy:false, state:'OFFLINE', players:0, capacity:100, latencyHintMs:240 }]
 ]);
