@@ -15,6 +15,22 @@ AGrandCityMobileGameMode::AGrandCityMobileGameMode()
     GameStateClass = AGrandCityMobileGameState::StaticClass();
 }
 
+void AGrandCityMobileGameMode::BeginPlay()
+{
+    Super::BeginPlay();
+
+    if (HasAuthority() && GetWorld())
+    {
+        GetWorldTimerManager().SetTimer(
+            ProfileCheckpointTimer,
+            this,
+            &AGrandCityMobileGameMode::SaveAllPlayerProfiles,
+            60.0f,
+            true,
+            60.0f);
+    }
+}
+
 void AGrandCityMobileGameMode::PostLogin(APlayerController* NewPlayer)
 {
     Super::PostLogin(NewPlayer);
@@ -76,4 +92,20 @@ void AGrandCityMobileGameMode::UpdateOnlinePlayerCount()
     }
 
     CityGameState->OnlinePlayerCount = GetNumPlayers();
+}
+
+void AGrandCityMobileGameMode::SaveAllPlayerProfiles()
+{
+    if (!HasAuthority() || !GetWorld())
+    {
+        return;
+    }
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(It->Get()))
+        {
+            CityController->SavePersistentProfile();
+        }
+    }
 }
