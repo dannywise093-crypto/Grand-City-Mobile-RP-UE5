@@ -15,7 +15,10 @@ public class GrandCityMobile : ModuleRules
             "UMG",
             "AIModule",
             "NavigationSystem",
-            "NetCore"
+            "NetCore",
+            "HTTP",
+            "Json",
+            "JsonUtilities"
         });
     }
 }
