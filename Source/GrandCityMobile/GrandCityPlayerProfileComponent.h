@@ -5,6 +5,9 @@
 #include "GrandCityPlayerProfileTypes.h"
 #include "GrandCityPlayerProfileComponent.generated.h"
 
+delegate void FGrandCityProfileComponentLoadResult(bool bSuccess);
+delegate void FGrandCityProfileComponentSaveResult(bool bSuccess);
+
 UCLASS(ClassGroup=(GrandCity), meta=(BlueprintSpawnableComponent))
 class GRANDCITYMOBILE_API UGrandCityPlayerProfileComponent : public UActorComponent
 {
@@ -13,8 +16,8 @@ class GRANDCITYMOBILE_API UGrandCityPlayerProfileComponent : public UActorCompon
 public:
     UGrandCityPlayerProfileComponent();
 
-    bool LoadProfile();
-    bool SaveProfile();
+    void LoadProfile(FGrandCityProfileComponentLoadResult Callback);
+    void SaveProfile(FGrandCityProfileComponentSaveResult Callback);
 
     void ApplyProfileToPlayerState();
     void CaptureProfileFromPlayerState();
