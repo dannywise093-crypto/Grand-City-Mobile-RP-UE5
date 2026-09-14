@@ -1,16 +1,14 @@
 #include "GrandCityMobileAuthWidget.h"
 
 #include "GrandCityMobileAccountClientSubsystem.h"
+#include "GrandCityMobilePlayerController.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
 #include "Components/Border.h"
-#include "Components/BorderSlot.h"
 #include "Components/WidgetTree.h"
 #include "Engine/GameInstance.h"
-#include "GameFramework/PlayerController.h"
 #include "Internationalization/Text.h"
 
 void UGrandCityMobileAuthWidget::NativeConstruct()
@@ -21,10 +19,7 @@ void UGrandCityMobileAuthWidget::NativeConstruct()
 
 void UGrandCityMobileAuthWidget::BuildInterface()
 {
-    if (!WidgetTree)
-    {
-        return;
-    }
+    if (!WidgetTree) return;
 
     UBorder* Background = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
     UVerticalBox* Panel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
@@ -70,16 +65,12 @@ void UGrandCityMobileAuthWidget::BuildInterface()
     ModeButton->OnClicked.AddDynamic(this, &UGrandCityMobileAuthWidget::HandleModeClicked);
 
     StatusText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-    StatusText->SetText(FText::GetEmpty());
     Panel->AddChildToVerticalBox(StatusText);
 }
 
 void UGrandCityMobileAuthWidget::HandleLoginClicked()
 {
-    if (bBusy || !DisplayNameInput || !PasswordInput)
-    {
-        return;
-    }
+    if (bBusy || !DisplayNameInput || !PasswordInput) return;
 
     const FString DisplayName = DisplayNameInput->GetText().ToString().TrimStartAndEnd();
     const FString Password = PasswordInput->GetText().ToString();
@@ -90,13 +81,7 @@ void UGrandCityMobileAuthWidget::HandleLoginClicked()
     }
 
     UGameInstance* GI = GetGameInstance();
-    if (!GI)
-    {
-        SetStatus(TEXT("Game instance unavailable."), true);
-        return;
-    }
-
-    UGrandCityMobileAccountClientSubsystem* AccountClient = GI->GetSubsystem<UGrandCityMobileAccountClientSubsystem>();
+    UGrandCityMobileAccountClientSubsystem* AccountClient = GI ? GI->GetSubsystem<UGrandCityMobileAccountClientSubsystem>() : nullptr;
     if (!AccountClient)
     {
         SetStatus(TEXT("Account service unavailable."), true);
@@ -111,10 +96,7 @@ void UGrandCityMobileAuthWidget::HandleLoginClicked()
 
 void UGrandCityMobileAuthWidget::HandleRegisterClicked()
 {
-    if (bBusy || !DisplayNameInput || !PasswordInput || !ConfirmPasswordInput)
-    {
-        return;
-    }
+    if (bBusy || !DisplayNameInput || !PasswordInput || !ConfirmPasswordInput) return;
 
     const FString DisplayName = DisplayNameInput->GetText().ToString().TrimStartAndEnd();
     const FString Password = PasswordInput->GetText().ToString();
@@ -125,7 +107,6 @@ void UGrandCityMobileAuthWidget::HandleRegisterClicked()
         SetStatus(TEXT("Complete all account fields."), true);
         return;
     }
-
     if (Password != Confirm)
     {
         SetStatus(TEXT("Passwords do not match."), true);
@@ -148,40 +129,23 @@ void UGrandCityMobileAuthWidget::HandleRegisterClicked()
 
 void UGrandCityMobileAuthWidget::HandleModeClicked()
 {
-    if (bBusy)
-    {
-        return;
-    }
+    if (bBusy) return;
 
     bRegisterMode = !bRegisterMode;
-    if (TitleText)
-    {
-        TitleText->SetText(FText::FromString(bRegisterMode ? TEXT("CREATE ACCOUNT") : TEXT("GRAND CITY MOBILE")));
-    }
-    if (ConfirmPasswordInput)
-    {
-        ConfirmPasswordInput->SetVisibility(bRegisterMode ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    }
+    if (TitleText) TitleText->SetText(FText::FromString(bRegisterMode ? TEXT("CREATE ACCOUNT") : TEXT("GRAND CITY MOBILE")));
+    if (ConfirmPasswordInput) ConfirmPasswordInput->SetVisibility(bRegisterMode ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     if (PrimaryButton)
     {
         if (UTextBlock* Label = Cast<UTextBlock>(PrimaryButton->GetChildAt(0)))
-        {
             Label->SetText(FText::FromString(bRegisterMode ? TEXT("REGISTER") : TEXT("LOGIN")));
-        }
     }
-    if (ModeText)
-    {
-        ModeText->SetText(FText::FromString(bRegisterMode ? TEXT("Already have an account? Login") : TEXT("Create a new account")));
-    }
+    if (ModeText) ModeText->SetText(FText::FromString(bRegisterMode ? TEXT("Already have an account? Login") : TEXT("Create a new account")));
     SetStatus(TEXT(""));
 }
 
 void UGrandCityMobileAuthWidget::SetStatus(const FString& Message, bool bError)
 {
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString(Message));
-    }
+    if (StatusText) StatusText->SetText(FText::FromString(Message));
 }
 
 void UGrandCityMobileAuthWidget::SetBusy(bool bInBusy)
@@ -201,6 +165,14 @@ void UGrandCityMobileAuthWidget::CompleteAuthentication(bool bSuccess, const FGr
         return;
     }
 
+    AGrandCityMobilePlayerController* PC = GetOwningPlayer<AGrandCityMobilePlayerController>();
+    if (!PC)
+    {
+        SetStatus(TEXT("Player controller unavailable."), true);
+        return;
+    }
+
+    PC->SetAuthCredentials(AuthToken, FString());
     SetStatus(FString::Printf(TEXT("Welcome, %s. Connecting to %s..."), *Identity.DisplayName, *Identity.RegionId));
-    RemoveFromParent();
+    PC->TravelToAuthenticatedRegion(Identity.RegionId);
 }
