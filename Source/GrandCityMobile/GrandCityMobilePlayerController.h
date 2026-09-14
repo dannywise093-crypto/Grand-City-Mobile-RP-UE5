@@ -23,6 +23,7 @@ public:
     const FString& GetTransferToken() const { return TransferToken; }
     void ClearAuthCredentials();
     void TravelToAuthenticatedRegion(const FString& RegionId);
+    void TravelToBestWorldwideServer();
 
 protected:
     virtual void BeginPlay() override;
