@@ -6,6 +6,7 @@
 #include "GrandCityMobilePlayerController.generated.h"
 
 class UGrandCityPlayerProfileComponent;
+class UGrandCityMobileAuthWidget;
 
 UCLASS()
 class GRANDCITYMOBILE_API AGrandCityMobilePlayerController : public APlayerController
@@ -43,6 +44,9 @@ public:
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Grand City|Persistence", meta=(AllowPrivateAccess="true"))
     TObjectPtr<UGrandCityPlayerProfileComponent> PlayerProfileComponent;
+
+    UPROPERTY()
+    TObjectPtr<UGrandCityMobileAuthWidget> AuthWidget;
 
     FString AuthToken;
     FString TransferToken;
