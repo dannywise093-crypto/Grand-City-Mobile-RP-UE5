@@ -24,13 +24,21 @@ void AGrandCityMobileGameMode::PostLogin(APlayerController* NewPlayer)
         return;
     }
 
+    AGrandCityMobilePlayerState* PlayerState = NewPlayer->GetPlayerState<AGrandCityMobilePlayerState>();
+    if (PlayerState)
+    {
+        PlayerState->AccountId = FString::Printf(TEXT("LOCAL-%d"), PlayerState->GetPlayerId());
+        PlayerState->DisplayName = NewPlayer->GetName();
+        PlayerState->RegionId = TEXT("AFRICA_WEST");
+        PlayerState->bAuthenticated = true;
+    }
+
     UpdateOnlinePlayerCount();
 }
 
 void AGrandCityMobileGameMode::Logout(AController* Exiting)
 {
     Super::Logout(Exiting);
-
     UpdateOnlinePlayerCount();
 }
 
