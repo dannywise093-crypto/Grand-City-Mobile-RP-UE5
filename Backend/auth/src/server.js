@@ -11,6 +11,7 @@ const PORT = Number(process.env.PORT || 8080);
 const DATABASE_URL = process.env.DATABASE_URL;
 const JWT_SECRET = process.env.JWT_SECRET;
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+const CONNECTION_TICKET_TTL_SECONDS = 30;
 
 if (!DATABASE_URL || !JWT_SECRET || !INTERNAL_API_KEY) {
   throw new Error('DATABASE_URL, JWT_SECRET and INTERNAL_API_KEY are required');
@@ -23,6 +24,11 @@ function requireInternal(req, res, next) {
     return res.status(401).json({ error: 'unauthorized' });
   }
   next();
+}
+
+function bearerToken(req) {
+  const header = req.get('authorization') || '';
+  return header.startsWith('Bearer ') ? header.slice(7) : '';
 }
 
 function issueToken(account) {
@@ -106,6 +112,64 @@ app.post('/v1/auth/verify', requireInternal, async (req, res) => {
     res.json({ valid: true, account: result.rows[0] });
   } catch {
     res.status(401).json({ valid: false });
+  }
+});
+
+app.post('/v1/connection-tickets', async (req, res) => {
+  try {
+    const payload = jwt.verify(bearerToken(req), JWT_SECRET, { issuer: 'grand-city-account-service', audience: 'grand-city-servers' });
+    const { targetServerId } = req.body ?? {};
+    if (!targetServerId || typeof targetServerId !== 'string') {
+      return res.status(400).json({ error: 'invalid_target_server' });
+    }
+
+    const account = await pool.query(
+      `SELECT account_id FROM accounts WHERE account_id = $1`,
+      [payload.sub]
+    );
+    if (!account.rows[0]) return res.status(401).json({ error: 'account_not_found' });
+
+    const rawTicket = crypto.randomBytes(32).toString('base64url');
+    const ticketHash = crypto.createHash('sha256').update(rawTicket).digest('hex');
+    await pool.query(
+      `DELETE FROM connection_tickets WHERE expires_at <= NOW();
+       INSERT INTO connection_tickets(ticket_hash, account_id, target_server_id, expires_at)
+       VALUES ($1, $2, $3, NOW() + INTERVAL '30 seconds')`,
+      [ticketHash, payload.sub, targetServerId]
+    );
+
+    res.json({ ticket: rawTicket, expiresInSeconds: CONNECTION_TICKET_TTL_SECONDS, serverId: targetServerId });
+  } catch {
+    res.status(401).json({ error: 'invalid_auth_token' });
+  }
+});
+
+app.post('/v1/connection-tickets/consume', requireInternal, async (req, res) => {
+  const { ticket, serverId } = req.body ?? {};
+  if (!ticket || !serverId) return res.status(400).json({ error: 'invalid_ticket_request' });
+
+  const ticketHash = crypto.createHash('sha256').update(ticket).digest('hex');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `DELETE FROM connection_tickets
+       WHERE ticket_hash = $1 AND target_server_id = $2 AND expires_at > NOW()
+       RETURNING account_id, target_server_id`,
+      [ticketHash, serverId]
+    );
+    if (!result.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(401).json({ error: 'invalid_or_expired_ticket' });
+    }
+    await client.query('COMMIT');
+    res.json({ valid: true, accountId: result.rows[0].account_id, serverId: result.rows[0].target_server_id });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error(error);
+    res.status(500).json({ error: 'ticket_consume_failed' });
+  } finally {
+    client.release();
   }
 });
 
