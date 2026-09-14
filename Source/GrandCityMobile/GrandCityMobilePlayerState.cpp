@@ -6,10 +6,14 @@ AGrandCityMobilePlayerState::AGrandCityMobilePlayerState()
     bReplicates = true;
 }
 
-void AGrandCityMobilePlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+void AGrandCityMobilePlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeReplicatedProps) const
 {
-    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    Super::GetLifetimeReplicatedProps(OutLifetimeReplicatedProps);
 
+    DOREPLIFETIME(AGrandCityMobilePlayerState, AccountId);
+    DOREPLIFETIME(AGrandCityMobilePlayerState, DisplayName);
+    DOREPLIFETIME(AGrandCityMobilePlayerState, RegionId);
+    DOREPLIFETIME(AGrandCityMobilePlayerState, bAuthenticated);
     DOREPLIFETIME(AGrandCityMobilePlayerState, CharacterLevel);
     DOREPLIFETIME(AGrandCityMobilePlayerState, Cash);
     DOREPLIFETIME(AGrandCityMobilePlayerState, BankBalance);
