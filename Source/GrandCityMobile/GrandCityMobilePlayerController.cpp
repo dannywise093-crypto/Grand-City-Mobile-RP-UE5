@@ -4,6 +4,7 @@
 #include "GrandCityMobileAuthWidget.h"
 #include "GrandCityMobileAccountClientSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "GenericPlatform/GenericPlatformHttp.h"
 #include "Misc/ConfigCacheIni.h"
 #include "GameFramework/Pawn.h"
 
