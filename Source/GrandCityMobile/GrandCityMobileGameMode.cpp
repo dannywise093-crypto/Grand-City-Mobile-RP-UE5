@@ -3,8 +3,10 @@
 #include "GrandCityMobileGameState.h"
 #include "GrandCityMobilePlayerController.h"
 #include "GrandCityMobilePlayerState.h"
+#include "GrandCityAccountAuthSubsystem.h"
 
 #include "Engine/World.h"
+#include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
 
 AGrandCityMobileGameMode::AGrandCityMobileGameMode()
@@ -35,27 +37,13 @@ FString AGrandCityMobileGameMode::InitNewPlayer(APlayerController* NewPlayer, co
 {
     const FString Result = Super::InitNewPlayer(NewPlayer, UniqueId, Options, Portal);
 
-    if (NewPlayer)
+    if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(NewPlayer))
     {
-        AGrandCityMobilePlayerState* PlayerState = NewPlayer->GetPlayerState<AGrandCityMobilePlayerState>();
-        if (PlayerState)
-        {
-            FString AccountId;
-            FParse::Value(*Options, TEXT("AccountId="), AccountId);
-            if (AccountId.IsEmpty() && UniqueId.IsValid())
-            {
-                AccountId = UniqueId.ToString();
-            }
-            if (AccountId.IsEmpty())
-            {
-                AccountId = FString::Printf(TEXT("LOCAL-%d"), PlayerState->GetPlayerId());
-            }
-
-            PlayerState->AccountId = AccountId;
-            PlayerState->DisplayName = NewPlayer->GetName();
-            PlayerState->RegionId = TEXT("AFRICA_WEST");
-            PlayerState->bAuthenticated = false;
-        }
+        FString AuthToken;
+        FString TransferToken;
+        FParse::Value(*Options, TEXT("AuthToken="), AuthToken);
+        FParse::Value(*Options, TEXT("TransferToken="), TransferToken);
+        CityController->SetAuthCredentials(AuthToken, TransferToken);
     }
 
     return Result;
@@ -65,33 +53,85 @@ void AGrandCityMobileGameMode::PostLogin(APlayerController* NewPlayer)
 {
     Super::PostLogin(NewPlayer);
 
-    if (!NewPlayer)
+    AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(NewPlayer);
+    if (!CityController)
     {
         return;
     }
 
-    AGrandCityMobilePlayerState* PlayerState = NewPlayer->GetPlayerState<AGrandCityMobilePlayerState>();
-    if (!PlayerState || PlayerState->AccountId.IsEmpty())
+    UGameInstance* GameInstance = GetGameInstance();
+    UGrandCityAccountAuthSubsystem* Auth = GameInstance ? GameInstance->GetSubsystem<UGrandCityAccountAuthSubsystem>() : nullptr;
+    if (!Auth || CityController->GetAuthToken().IsEmpty())
     {
-        NewPlayer->Destroy();
+        RejectUnauthenticatedPlayer(CityController, TEXT("Authentication is required. Please sign in again."));
         return;
     }
 
-    if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(NewPlayer))
-    {
-        TWeakObjectPtr<APlayerController> WeakPlayer(NewPlayer);
-        CityController->LoadPersistentProfile(
-            [this, WeakPlayer](bool bSuccess)
+    TWeakObjectPtr<AGrandCityMobilePlayerController> WeakController(CityController);
+    Auth->VerifyToken(CityController->GetAuthToken(),
+        [this, WeakController](bool bVerified, const FGrandCityAccountIdentity& Identity)
+        {
+            AGrandCityMobilePlayerController* Player = WeakController.Get();
+            if (!Player)
             {
-                APlayerController* Player = WeakPlayer.Get();
-                if (Player)
-                {
-                    HandleProfileLoaded(Player, bSuccess);
-                }
-            });
-    }
+                return;
+            }
 
-    UpdateOnlinePlayerCount();
+            if (!bVerified || Identity.AccountId.IsEmpty())
+            {
+                RejectUnauthenticatedPlayer(Player, TEXT("Your account session is invalid or expired."));
+                return;
+            }
+
+            AGrandCityMobilePlayerState* PlayerState = Player->GetPlayerState<AGrandCityMobilePlayerState>();
+            if (!PlayerState)
+            {
+                RejectUnauthenticatedPlayer(Player, TEXT("Unable to initialize account state."));
+                return;
+            }
+
+            PlayerState->AccountId = Identity.AccountId;
+            PlayerState->DisplayName = Identity.DisplayName;
+            PlayerState->RegionId = Identity.RegionId;
+            PlayerState->bAuthenticated = false;
+
+            AGrandCityMobileGameState* CityGameState = GetGameState<AGrandCityMobileGameState>();
+            const FString ServerId = CityGameState ? CityGameState->ServerId : TEXT("GC-AFRICA-01");
+
+            UGameInstance* GameInstance = GetGameInstance();
+            UGrandCityAccountAuthSubsystem* Auth = GameInstance ? GameInstance->GetSubsystem<UGrandCityAccountAuthSubsystem>() : nullptr;
+            if (!Auth)
+            {
+                RejectUnauthenticatedPlayer(Player, TEXT("Account service is unavailable."));
+                return;
+            }
+
+            Auth->ClaimSession(Identity.AccountId, ServerId, Player->GetTransferToken(),
+                [this, WeakController](bool bClaimed, const FString&)
+                {
+                    AGrandCityMobilePlayerController* ClaimedPlayer = WeakController.Get();
+                    if (!ClaimedPlayer)
+                    {
+                        return;
+                    }
+
+                    if (!bClaimed)
+                    {
+                        RejectUnauthenticatedPlayer(ClaimedPlayer, TEXT("This account is already active on another server or the transfer is invalid."));
+                        return;
+                    }
+
+                    ClaimedPlayer->LoadPersistentProfile(
+                        [this, WeakController](bool bLoaded)
+                        {
+                            AGrandCityMobilePlayerController* LoadedPlayer = WeakController.Get();
+                            if (LoadedPlayer)
+                            {
+                                HandleProfileLoaded(LoadedPlayer, bLoaded);
+                            }
+                        });
+                });
+        });
 }
 
 void AGrandCityMobileGameMode::Logout(AController* Exiting)
@@ -100,7 +140,23 @@ void AGrandCityMobileGameMode::Logout(AController* Exiting)
 
     if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(Exiting))
     {
-        CityController->SavePersistentProfile([](bool) {});
+        const FString AccountId = CityController->GetPlayerState<AGrandCityMobilePlayerState>()
+            ? CityController->GetPlayerState<AGrandCityMobilePlayerState>()->AccountId
+            : FString();
+        const FString ServerId = GetGameState<AGrandCityMobileGameState>()
+            ? GetGameState<AGrandCityMobileGameState>()->ServerId
+            : TEXT("GC-AFRICA-01");
+
+        CityController->SavePersistentProfile([this, AccountId, ServerId](bool)
+        {
+            UGameInstance* GameInstance = GetGameInstance();
+            UGrandCityAccountAuthSubsystem* Auth = GameInstance ? GameInstance->GetSubsystem<UGrandCityAccountAuthSubsystem>() : nullptr;
+            if (Auth && !AccountId.IsEmpty())
+            {
+                Auth->ReleaseSession(AccountId, ServerId, [](bool) {});
+            }
+        });
+        CityController->ClearAuthCredentials();
     }
 
     Super::Logout(Exiting);
@@ -131,8 +187,7 @@ void AGrandCityMobileGameMode::HandleProfileLoaded(APlayerController* Player, bo
 
     if (!bSuccess)
     {
-        Player->ClientReturnToMainMenuWithTextReason(FText::FromString(TEXT("Unable to load your saved character data. Please try again.")));
-        Player->Destroy();
+        RejectUnauthenticatedPlayer(Cast<AGrandCityMobilePlayerController>(Player), TEXT("Unable to load your saved character data."));
         return;
     }
 
@@ -143,6 +198,17 @@ void AGrandCityMobileGameMode::HandleProfileLoaded(APlayerController* Player, bo
 
     ProfileReadyPlayers.Add(Player);
     RestartPlayer(Player);
+}
+
+void AGrandCityMobileGameMode::RejectUnauthenticatedPlayer(AGrandCityMobilePlayerController* Player, const FString& Reason)
+{
+    if (!Player || !HasAuthority())
+    {
+        return;
+    }
+
+    Player->ClientReturnToMainMenuWithTextReason(FText::FromString(Reason));
+    Player->Destroy();
 }
 
 void AGrandCityMobileGameMode::UpdateOnlinePlayerCount()

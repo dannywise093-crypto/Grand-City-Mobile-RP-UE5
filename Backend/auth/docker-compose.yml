@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: grandcity
+      POSTGRES_USER: grandcity
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - grandcity_pg:/var/lib/postgresql/data
+      - ./db/001_accounts.sql:/docker-entrypoint-initdb.d/001_accounts.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grandcity -d grandcity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  account-service:
+    build: .
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgresql://grandcity:${POSTGRES_PASSWORD}@postgres:5432/grandcity
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+volumes:
+  grandcity_pg:

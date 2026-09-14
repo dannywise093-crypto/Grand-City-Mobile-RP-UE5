@@ -6,6 +6,7 @@
 #include "GrandCityMobilePlayerController.generated.h"
 
 class UGrandCityPlayerProfileComponent;
+class UGrandCityMobileAuthWidget;
 
 UCLASS()
 class GRANDCITYMOBILE_API AGrandCityMobilePlayerController : public APlayerController
@@ -17,6 +18,11 @@ public:
 
     void LoadPersistentProfile(FGrandCityProfileComponentLoadResult Callback);
     void SavePersistentProfile(FGrandCityProfileComponentSaveResult Callback);
+    void SetAuthCredentials(const FString& InAuthToken, const FString& InTransferToken);
+    const FString& GetAuthToken() const { return AuthToken; }
+    const FString& GetTransferToken() const { return TransferToken; }
+    void ClearAuthCredentials();
+    void TravelToAuthenticatedRegion(const FString& RegionId);
 
 protected:
     virtual void BeginPlay() override;
@@ -39,4 +45,10 @@ public:
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Grand City|Persistence", meta=(AllowPrivateAccess="true"))
     TObjectPtr<UGrandCityPlayerProfileComponent> PlayerProfileComponent;
+
+    UPROPERTY()
+    TObjectPtr<UGrandCityMobileAuthWidget> AuthWidget;
+
+    FString AuthToken;
+    FString TransferToken;
 };
