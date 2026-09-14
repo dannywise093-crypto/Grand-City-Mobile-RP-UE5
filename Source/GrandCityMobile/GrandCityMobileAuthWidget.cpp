@@ -54,5 +54,5 @@ void UGrandCityMobileAuthWidget::SetBusy(bool bInBusy){bBusy=bInBusy;if(PrimaryB
 void UGrandCityMobileAuthWidget::CompleteAuthentication(bool bSuccess,const FGrandCityAccountIdentity& Identity,const FString& AuthToken,const FString& ErrorCode){
     SetBusy(false); if(!bSuccess){SetStatus(FString::Printf(TEXT("Authentication failed: %s"),*ErrorCode),true);return;}
     AGrandCityMobilePlayerController* PC=GetOwningPlayer<AGrandCityMobilePlayerController>(); if(!PC){SetStatus(TEXT("Player controller unavailable."),true);return;}
-    PC->SetAuthCredentials(AuthToken,FString()); SetStatus(FString::Printf(TEXT("Welcome, %s. Connecting to %s..."),*Identity.DisplayName,*Identity.RegionId)); PC->TravelToAuthenticatedRegion(Identity.RegionId);
+    PC->SetAuthCredentials(AuthToken,FString()); SetStatus(TEXT("Authenticated. Finding the best worldwide server...")); PC->TravelToBestWorldwideServer();
 }
