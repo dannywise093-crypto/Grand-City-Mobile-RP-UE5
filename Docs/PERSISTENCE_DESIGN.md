@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This layer defines the server-authoritative profile contract for player data. It separates gameplay state from the future external database/backend so the storage implementation can evolve without changing PlayerState contracts.
+This layer defines the server-authoritative profile contract for player data and connects it to a durable PostgreSQL-backed service.
 
 ## Profile data
 
@@ -23,21 +23,20 @@ Each profile contains:
 ## Authority rules
 
 - Clients never write persistent cash, bank, level, or reputation directly.
-- The authoritative game server loads a profile during login and applies it to PlayerState.
-- The authoritative game server saves the profile during logout and controlled persistence checkpoints.
+- The authoritative game server loads a profile before allowing the player to spawn.
+- New profiles are persisted immediately after creation.
+- The authoritative game server saves the profile during logout and controlled checkpoints.
 - AccountId is the primary profile key.
-- SchemaVersion allows future migrations without changing the external contract.
+- SchemaVersion allows future migrations without changing PlayerState contracts.
 
-## Storage boundary
+## Durable storage
 
-`UGrandCityPlayerPersistenceSubsystem` currently provides an in-memory server-side storage adapter. This is intentionally not presented as production persistence: data will be lost when the server process exits.
+`UGrandCityDurablePersistenceSubsystem` communicates with the Grand City persistence API over HTTP. The API stores profiles in PostgreSQL. The database is external to the Unreal server process, so an Unreal server restart does not erase player data.
 
-The subsystem is the boundary for the future database/backend adapter. A later implementation can connect this interface to the Grand City master/account service and a durable database without making clients responsible for persistence.
+The old in-memory persistence subsystem has been removed.
 
-## Next persistence stages
+## Server transfers
 
-1. Apply loaded profiles to PlayerState during login.
-2. Save profiles during logout and controlled checkpoints.
-3. Add profile validation and migration handling.
-4. Add durable backend/database storage.
-5. Add cross-region/session transfer safeguards.
+All regional game servers can use the same authoritative persistence API. A destination server can load the same AccountId after a source server saves the latest profile. Production transfer flow still needs signed player authentication and a short-lived account/session lease to prevent simultaneous writes by two servers.
+
+See `Docs/DURABLE_PERSISTENCE.md` for deployment and security requirements.
