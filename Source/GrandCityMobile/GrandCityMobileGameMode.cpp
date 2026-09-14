@@ -4,6 +4,7 @@
 #include "GrandCityMobilePlayerController.h"
 #include "GrandCityMobilePlayerState.h"
 #include "GrandCityAccountAuthSubsystem.h"
+#include "GrandCityServerRegistrySubsystem.h"
 
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -30,11 +31,50 @@ void AGrandCityMobileGameMode::BeginPlay()
             60.0f,
             true,
             60.0f);
+
+        if (UGameInstance* GameInstance = GetGameInstance())
+        {
+            if (UGrandCityServerRegistrySubsystem* Registry = GameInstance->GetSubsystem<UGrandCityServerRegistrySubsystem>())
+            {
+                Registry->StartServerRegistration();
+            }
+        }
     }
+}
+
+void AGrandCityMobileGameMode::BeginServerDrain()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    if (AGrandCityMobileGameState* CityGameState = GetGameState<AGrandCityMobileGameState>())
+    {
+        CityGameState->bServerDraining = true;
+    }
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UGrandCityServerRegistrySubsystem* Registry = GameInstance->GetSubsystem<UGrandCityServerRegistrySubsystem>())
+        {
+            Registry->BeginDraining();
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("Grand City server is now DRAINING; new player sessions will be rejected."));
 }
 
 FString AGrandCityMobileGameMode::InitNewPlayer(APlayerController* NewPlayer, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal)
 {
+    if (const AGrandCityMobileGameState* CityGameState = GetGameState<AGrandCityMobileGameState>())
+    {
+        if (CityGameState->bServerDraining)
+        {
+            return TEXT("SERVER_DRAINING");
+        }
+    }
+
     const FString Result = Super::InitNewPlayer(NewPlayer, UniqueId, Options, Portal);
 
     if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(NewPlayer))
@@ -52,6 +92,15 @@ FString AGrandCityMobileGameMode::InitNewPlayer(APlayerController* NewPlayer, co
 void AGrandCityMobileGameMode::PostLogin(APlayerController* NewPlayer)
 {
     Super::PostLogin(NewPlayer);
+
+    if (const AGrandCityMobileGameState* CityGameState = GetGameState<AGrandCityMobileGameState>())
+    {
+        if (CityGameState->bServerDraining)
+        {
+            RejectUnauthenticatedPlayer(Cast<AGrandCityMobilePlayerController>(NewPlayer), TEXT("This server is draining and is not accepting new players."));
+            return;
+        }
+    }
 
     AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(NewPlayer);
     if (!CityController)
@@ -96,7 +145,7 @@ void AGrandCityMobileGameMode::PostLogin(APlayerController* NewPlayer)
             PlayerState->bAuthenticated = false;
 
             AGrandCityMobileGameState* CityGameState = GetGameState<AGrandCityMobileGameState>();
-            const FString ServerId = CityGameState ? CityGameState->ServerId : TEXT("GC-AFRICA-01");
+            const FString ServerId = CityGameState ? CityGameState->ServerId.ToString() : TEXT("GC-AFRICA-01");
 
             UGameInstance* GameInstance = GetGameInstance();
             UGrandCityAccountAuthSubsystem* Auth = GameInstance ? GameInstance->GetSubsystem<UGrandCityAccountAuthSubsystem>() : nullptr;
@@ -144,7 +193,7 @@ void AGrandCityMobileGameMode::Logout(AController* Exiting)
             ? CityController->GetPlayerState<AGrandCityMobilePlayerState>()->AccountId
             : FString();
         const FString ServerId = GetGameState<AGrandCityMobileGameState>()
-            ? GetGameState<AGrandCityMobileGameState>()->ServerId
+            ? GetGameState<AGrandCityMobileGameState>()->ServerId.ToString()
             : TEXT("GC-AFRICA-01");
 
         CityController->SavePersistentProfile([this, AccountId, ServerId](bool)
