@@ -65,7 +65,7 @@ void UGrandCityMobileAccountClientSubsystem::SendCredentialsRequest(const TCHAR*
     FJsonSerializer::Serialize(Body.ToSharedRef(), Writer);
     Request->SetContentAsString(Payload);
 
-    Request->OnProcessRequestComplete().BindLambda([Callback](FHttpRequestPtr, FHttpResponsePtr Response, bool bConnected)
+    Request->OnProcessRequestComplete().BindLambda([this, Callback](FHttpRequestPtr, FHttpResponsePtr Response, bool bConnected)
     {
         if (!bConnected || !Response.IsValid())
         {
@@ -80,20 +80,26 @@ void UGrandCityMobileAccountClientSubsystem::SendCredentialsRequest(const TCHAR*
             return;
         }
 
-        FGrandCityAccountIdentity Identity;
-        FString Token;
-        Json->TryGetStringField(TEXT("token"), Token);
+        FGrandCityAccountIdentity NewIdentity;
+        FString NewToken;
+        Json->TryGetStringField(TEXT("token"), NewToken);
 
         const TSharedPtr<FJsonObject>* Account = nullptr;
         if (Json->TryGetObjectField(TEXT("account"), Account) && Account && Account->IsValid())
         {
-            (*Account)->TryGetStringField(TEXT("account_id"), Identity.AccountId);
-            (*Account)->TryGetStringField(TEXT("display_name"), Identity.DisplayName);
-            (*Account)->TryGetStringField(TEXT("region_id"), Identity.RegionId);
+            (*Account)->TryGetStringField(TEXT("account_id"), NewIdentity.AccountId);
+            (*Account)->TryGetStringField(TEXT("display_name"), NewIdentity.DisplayName);
+            (*Account)->TryGetStringField(TEXT("region_id"), NewIdentity.RegionId);
         }
 
-        Identity.bAuthenticated = !Identity.AccountId.IsEmpty() && !Token.IsEmpty();
-        Callback(Identity.bAuthenticated, Identity, Token, Identity.bAuthenticated ? FString() : TEXT("invalid_auth_response"));
+        NewIdentity.bAuthenticated = !NewIdentity.AccountId.IsEmpty() && !NewToken.IsEmpty();
+        if (NewIdentity.bAuthenticated)
+        {
+            Identity = NewIdentity;
+            AuthToken = NewToken;
+        }
+
+        Callback(NewIdentity.bAuthenticated, NewIdentity, NewToken, NewIdentity.bAuthenticated ? FString() : TEXT("invalid_auth_response"));
     });
 
     Request->ProcessRequest();
