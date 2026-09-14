@@ -17,6 +17,10 @@ public:
 
     void LoadPersistentProfile(FGrandCityProfileComponentLoadResult Callback);
     void SavePersistentProfile(FGrandCityProfileComponentSaveResult Callback);
+    void SetAuthCredentials(const FString& InAuthToken, const FString& InTransferToken);
+    const FString& GetAuthToken() const { return AuthToken; }
+    const FString& GetTransferToken() const { return TransferToken; }
+    void ClearAuthCredentials();
 
 protected:
     virtual void BeginPlay() override;
@@ -39,4 +43,7 @@ public:
 private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Grand City|Persistence", meta=(AllowPrivateAccess="true"))
     TObjectPtr<UGrandCityPlayerProfileComponent> PlayerProfileComponent;
+
+    FString AuthToken;
+    FString TransferToken;
 };
