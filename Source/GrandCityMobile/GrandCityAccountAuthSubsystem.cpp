@@ -77,9 +77,9 @@ void UGrandCityAccountAuthSubsystem::VerifyToken(const FString& AuthToken, FGran
                 return;
             }
 
-            (*Account)->TryGetStringField(TEXT("accountId"), Result.AccountId);
-            (*Account)->TryGetStringField(TEXT("displayName"), Result.DisplayName);
-            (*Account)->TryGetStringField(TEXT("regionId"), Result.RegionId);
+            (*Account)->TryGetStringField(TEXT("account_id"), Result.AccountId);
+            (*Account)->TryGetStringField(TEXT("display_name"), Result.DisplayName);
+            (*Account)->TryGetStringField(TEXT("region_id"), Result.RegionId);
             Result.bAuthenticated = !Result.AccountId.IsEmpty();
             if (!Result.bAuthenticated)
             {
@@ -128,13 +128,7 @@ void UGrandCityAccountAuthSubsystem::ClaimSession(const FString& AccountId, cons
             Callback(false, FString());
             return;
         }
-        const TSharedPtr<FJsonObject> Json = ParseObject(Response->GetContentAsString());
-        FString ReturnedToken;
-        if (Json.IsValid())
-        {
-            Json->TryGetStringField(TEXT("transferToken"), ReturnedToken);
-        }
-        Callback(true, ReturnedToken);
+        Callback(true, FString());
     });
 
     Request->ProcessRequest();
