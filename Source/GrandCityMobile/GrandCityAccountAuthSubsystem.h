@@ -7,6 +7,7 @@
 
 delegate void FGrandCityAuthResult(bool bSuccess, const FGrandCityAccountIdentity& Identity);
 delegate void FGrandCitySessionResult(bool bSuccess, const FString& TransferToken);
+delegate void FGrandCityTicketConsumeResult(bool bSuccess, const FString& AccountId);
 
 UCLASS()
 class GRANDCITYMOBILE_API UGrandCityAccountAuthSubsystem : public UGameInstanceSubsystem
@@ -15,6 +16,7 @@ class GRANDCITYMOBILE_API UGrandCityAccountAuthSubsystem : public UGameInstanceS
 
 public:
     void VerifyToken(const FString& AuthToken, FGrandCityAuthResult Callback);
+    void ConsumeConnectionTicket(const FString& Ticket, const FString& ServerId, FGrandCityTicketConsumeResult Callback);
     void ClaimSession(const FString& AccountId, const FString& ServerId, const FString& TransferToken, FGrandCitySessionResult Callback);
     void ReleaseSession(const FString& AccountId, const FString& ServerId, TFunction<void(bool)> Callback);
 
