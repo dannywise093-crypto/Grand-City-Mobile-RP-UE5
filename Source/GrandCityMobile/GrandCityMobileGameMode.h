@@ -4,6 +4,9 @@
 #include "GameFramework/GameModeBase.h"
 #include "GrandCityMobileGameMode.generated.h"
 
+class AController;
+class APlayerController;
+
 UCLASS()
 class GRANDCITYMOBILE_API AGrandCityMobileGameMode : public AGameModeBase
 {
@@ -11,4 +14,12 @@ class GRANDCITYMOBILE_API AGrandCityMobileGameMode : public AGameModeBase
 
 public:
     AGrandCityMobileGameMode();
+
+protected:
+    virtual void PostLogin(APlayerController* NewPlayer) override;
+    virtual void Logout(AController* Exiting) override;
+    virtual void RestartPlayer(AController* NewPlayer) override;
+
+private:
+    void UpdateOnlinePlayerCount();
 };
