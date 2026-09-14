@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "GrandCityPlayerProfileComponent.h"
 #include "GrandCityMobilePlayerController.generated.h"
 
 class UGrandCityPlayerProfileComponent;
@@ -14,8 +15,8 @@ class GRANDCITYMOBILE_API AGrandCityMobilePlayerController : public APlayerContr
 public:
     AGrandCityMobilePlayerController();
 
-    bool LoadPersistentProfile();
-    bool SavePersistentProfile();
+    void LoadPersistentProfile(FGrandCityProfileComponentLoadResult Callback);
+    void SavePersistentProfile(FGrandCityProfileComponentSaveResult Callback);
 
 protected:
     virtual void BeginPlay() override;
