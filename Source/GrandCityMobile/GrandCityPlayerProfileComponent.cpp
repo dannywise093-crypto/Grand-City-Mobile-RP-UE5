@@ -43,26 +43,42 @@ void UGrandCityPlayerProfileComponent::LoadProfile(FGrandCityProfileComponentLoa
             if (bFound)
             {
                 Profile = LoadedProfile;
+                ApplyProfileToPlayerState();
+                Callback(true);
+                return;
             }
-            else
+
+            AGrandCityMobilePlayerState* PlayerState = GetOwningPlayerState(this);
+            if (!PlayerState)
             {
-                AGrandCityMobilePlayerState* PlayerState = GetOwningPlayerState(this);
-                if (!PlayerState)
-                {
-                    Callback(false);
-                    return;
-                }
-
-                Profile = FGrandCityPlayerProfile();
-                Profile.AccountId = PlayerState->AccountId;
-                Profile.CharacterId = FString::Printf(TEXT("CHAR-%s"), *PlayerState->AccountId);
-                Profile.CharacterName = PlayerState->DisplayName;
-                Profile.RegionId = PlayerState->RegionId;
-                Profile.CharacterLevel = 1;
+                Callback(false);
+                return;
             }
 
+            Profile = FGrandCityPlayerProfile();
+            Profile.AccountId = PlayerState->AccountId;
+            Profile.CharacterId = FString::Printf(TEXT("CHAR-%s"), *PlayerState->AccountId);
+            Profile.CharacterName = PlayerState->DisplayName;
+            Profile.RegionId = PlayerState->RegionId;
+            Profile.CharacterLevel = 1;
+            Profile.Cash = 0;
+            Profile.BankBalance = 0;
+            Profile.Reputation = 0;
+            Profile.LastSaveUnixSeconds = FDateTime::UtcNow().ToUnixTimestamp();
             ApplyProfileToPlayerState();
-            Callback(true);
+
+            UGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+            UGrandCityDurablePersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UGrandCityDurablePersistenceSubsystem>() : nullptr;
+            if (!Persistence)
+            {
+                Callback(false);
+                return;
+            }
+
+            Persistence->SaveProfile(Profile, [Callback](bool bSaveSuccess, const FGrandCityPlayerProfile&)
+            {
+                Callback(bSaveSuccess);
+            });
         });
 }
 
