@@ -3,6 +3,7 @@
 #include "GrandCityPlayerProfileComponent.h"
 #include "GrandCityMobileAuthWidget.h"
 #include "GrandCityMobileAccountClientSubsystem.h"
+#include "GrandCityGlobalRoutingSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "Misc/ConfigCacheIni.h"
@@ -63,6 +64,39 @@ void AGrandCityMobilePlayerController::TravelToAuthenticatedRegion(const FString
     }
 
     ClientTravel(TravelURL, TRAVEL_Absolute);
+}
+
+void AGrandCityMobilePlayerController::TravelToBestWorldwideServer()
+{
+    if (!IsLocalController() || AuthToken.IsEmpty())
+    {
+        return;
+    }
+
+    UGameInstance* GI = GetGameInstance();
+    UGrandCityGlobalRoutingSubsystem* Router = GI ? GI->GetSubsystem<UGrandCityGlobalRoutingSubsystem>() : nullptr;
+    if (!Router)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Global routing service unavailable; refusing fallback travel."));
+        return;
+    }
+
+    Router->FindBestServer(TMap<FString, int32>(), [this](const FGrandCityRouteResult& Route)
+    {
+        if (!Route.bSuccess || Route.Endpoint.IsEmpty())
+        {
+            UE_LOG(LogTemp, Error, TEXT("Worldwide routing failed: %s"), *Route.Error);
+            return;
+        }
+
+        FString TravelURL = Route.Endpoint + TEXT("?AuthToken=") + FGenericPlatformHttp::UrlEncode(AuthToken);
+        if (!TransferToken.IsEmpty())
+        {
+            TravelURL += TEXT("&TransferToken=") + FGenericPlatformHttp::UrlEncode(TransferToken);
+        }
+
+        ClientTravel(TravelURL, TRAVEL_Absolute);
+    });
 }
 
 void AGrandCityMobilePlayerController::OnPossess(APawn* InPawn)
