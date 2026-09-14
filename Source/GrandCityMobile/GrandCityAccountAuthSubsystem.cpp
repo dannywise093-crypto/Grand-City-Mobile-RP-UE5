@@ -22,14 +22,14 @@ namespace
 FString UGrandCityAccountAuthSubsystem::GetBaseUrl() const
 {
     FString Value;
-    GConfig->GetString(TEXT("/Script/GrandCityMobile.GrandCityPersistenceSettings"), TEXT("AccountServiceBaseUrl"), Value, GGameIni);
+    GConfig->GetString(TEXT("/Script/GrandCityMobile.GrandCityPersistenceSettings"), TEXT("BaseUrl"), Value, GGameIni);
     return Value.IsEmpty() ? TEXT("http://127.0.0.1:8080") : Value;
 }
 
 FString UGrandCityAccountAuthSubsystem::GetInternalApiKey() const
 {
     FString Value;
-    GConfig->GetString(TEXT("/Script/GrandCityMobile.GrandCityPersistenceSettings"), TEXT("InternalApiKey"), Value, GGameIni);
+    GConfig->GetString(TEXT("/Script/GrandCityMobile.GrandCityPersistenceSettings"), TEXT("ApiKey"), Value, GGameIni);
     return Value;
 }
 
@@ -47,7 +47,7 @@ void UGrandCityAccountAuthSubsystem::VerifyToken(const FString& AuthToken, FGran
     }
 
     TSharedRef<IHttpRequest> Request = FHttpModule::Get().CreateRequest();
-    Request->SetURL(GetBaseUrl() / TEXT("/v1/auth/verify"));
+    Request->SetURL(GetBaseUrl() / TEXT("v1/auth/verify"));
     Request->SetVerb(TEXT("POST"));
     Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     Request->SetHeader(TEXT("x-internal-api-key"), GetInternalApiKey());
@@ -103,7 +103,7 @@ void UGrandCityAccountAuthSubsystem::ClaimSession(const FString& AccountId, cons
     }
 
     TSharedRef<IHttpRequest> Request = FHttpModule::Get().CreateRequest();
-    Request->SetURL(GetBaseUrl() / TEXT("/v1/sessions/claim"));
+    Request->SetURL(GetBaseUrl() / TEXT("v1/sessions/claim"));
     Request->SetVerb(TEXT("POST"));
     Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     Request->SetHeader(TEXT("x-internal-api-key"), GetInternalApiKey());
@@ -143,7 +143,7 @@ void UGrandCityAccountAuthSubsystem::ClaimSession(const FString& AccountId, cons
 void UGrandCityAccountAuthSubsystem::ReleaseSession(const FString& AccountId, const FString& ServerId, TFunction<void(bool)> Callback)
 {
     TSharedRef<IHttpRequest> Request = FHttpModule::Get().CreateRequest();
-    Request->SetURL(GetBaseUrl() / TEXT("/v1/sessions/release"));
+    Request->SetURL(GetBaseUrl() / TEXT("v1/sessions/release"));
     Request->SetVerb(TEXT("POST"));
     Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     Request->SetHeader(TEXT("x-internal-api-key"), GetInternalApiKey());
