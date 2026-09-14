@@ -22,6 +22,7 @@ public:
     const FString& GetAuthToken() const { return AuthToken; }
     const FString& GetTransferToken() const { return TransferToken; }
     void ClearAuthCredentials();
+    void TravelToAuthenticatedRegion(const FString& RegionId);
 
 protected:
     virtual void BeginPlay() override;
