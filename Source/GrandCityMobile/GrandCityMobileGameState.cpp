@@ -14,4 +14,5 @@ void AGrandCityMobileGameState::GetLifetimeReplicatedProps(TArray<FLifetimePrope
     DOREPLIFETIME(AGrandCityMobileGameState, ServerPopulationLimit);
     DOREPLIFETIME(AGrandCityMobileGameState, RegionId);
     DOREPLIFETIME(AGrandCityMobileGameState, ServerId);
+    DOREPLIFETIME(AGrandCityMobileGameState, bServerDraining);
 }
