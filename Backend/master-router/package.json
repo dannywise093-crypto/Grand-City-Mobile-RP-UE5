@@ -1,0 +1,7 @@
+{
+  "name": "grand-city-global-master-router",
+  "private": true,
+  "type": "module",
+  "scripts": {"start": "node src/server.js"},
+  "dependencies": {"express": "^5.1.0"}
+}
