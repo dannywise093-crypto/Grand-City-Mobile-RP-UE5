@@ -1,7 +1,7 @@
 #include "GrandCityPlayerProfileComponent.h"
 
 #include "GrandCityMobilePlayerState.h"
-#include "GrandCityPlayerPersistenceSubsystem.h"
+#include "GrandCityDurablePersistenceSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
 
@@ -19,51 +19,76 @@ UGrandCityPlayerProfileComponent::UGrandCityPlayerProfileComponent()
     PrimaryComponentTick.bCanEverTick = false;
 }
 
-bool UGrandCityPlayerProfileComponent::LoadProfile()
+void UGrandCityPlayerProfileComponent::LoadProfile(FGrandCityProfileComponentLoadResult Callback)
 {
     AGrandCityMobilePlayerState* PlayerState = GetOwningPlayerState(this);
-    if (!PlayerState || PlayerState->AccountId.IsEmpty())
-    {
-        return false;
-    }
-
     UGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
-    UGrandCityPlayerPersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UGrandCityPlayerPersistenceSubsystem>() : nullptr;
-    if (!Persistence)
+    UGrandCityDurablePersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UGrandCityDurablePersistenceSubsystem>() : nullptr;
+
+    if (!PlayerState || PlayerState->AccountId.IsEmpty() || !Persistence)
     {
-        return false;
+        Callback(false);
+        return;
     }
 
-    const bool bFound = Persistence->LoadProfile(PlayerState->AccountId, Profile);
-    if (!bFound)
-    {
-        Profile.AccountId = PlayerState->AccountId;
-        Profile.CharacterId = FString::Printf(TEXT("CHAR-%s"), *PlayerState->AccountId);
-        Profile.CharacterName = PlayerState->DisplayName;
-        Profile.RegionId = PlayerState->RegionId;
-        Profile.CharacterLevel = PlayerState->CharacterLevel;
-        Profile.Cash = PlayerState->Cash;
-        Profile.BankBalance = PlayerState->BankBalance;
-        Profile.Reputation = PlayerState->Reputation;
-    }
+    Persistence->LoadProfile(PlayerState->AccountId,
+        [this, Callback](bool bSuccess, bool bFound, const FGrandCityPlayerProfile& LoadedProfile)
+        {
+            if (!bSuccess)
+            {
+                Callback(false);
+                return;
+            }
 
-    ApplyProfileToPlayerState();
-    return true;
+            if (bFound)
+            {
+                Profile = LoadedProfile;
+            }
+            else
+            {
+                AGrandCityMobilePlayerState* PlayerState = GetOwningPlayerState(this);
+                if (!PlayerState)
+                {
+                    Callback(false);
+                    return;
+                }
+
+                Profile = FGrandCityPlayerProfile();
+                Profile.AccountId = PlayerState->AccountId;
+                Profile.CharacterId = FString::Printf(TEXT("CHAR-%s"), *PlayerState->AccountId);
+                Profile.CharacterName = PlayerState->DisplayName;
+                Profile.RegionId = PlayerState->RegionId;
+                Profile.CharacterLevel = 1;
+            }
+
+            ApplyProfileToPlayerState();
+            Callback(true);
+        });
 }
 
-bool UGrandCityPlayerProfileComponent::SaveProfile()
+void UGrandCityPlayerProfileComponent::SaveProfile(FGrandCityProfileComponentSaveResult Callback)
 {
     CaptureProfileFromPlayerState();
     if (Profile.AccountId.IsEmpty())
     {
-        return false;
+        Callback(false);
+        return;
     }
 
     Profile.LastSaveUnixSeconds = FDateTime::UtcNow().ToUnixTimestamp();
 
     UGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
-    UGrandCityPlayerPersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UGrandCityPlayerPersistenceSubsystem>() : nullptr;
-    return Persistence ? Persistence->SaveProfile(Profile) : false;
+    UGrandCityDurablePersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UGrandCityDurablePersistenceSubsystem>() : nullptr;
+    if (!Persistence)
+    {
+        Callback(false);
+        return;
+    }
+
+    Persistence->SaveProfile(Profile, [Callback](bool bSuccess, const FGrandCityPlayerProfile&)
+    {
+        Callback(bSuccess);
+    });
 }
 
 void UGrandCityPlayerProfileComponent::ApplyProfileToPlayerState()
@@ -78,6 +103,14 @@ void UGrandCityPlayerProfileComponent::ApplyProfileToPlayerState()
     PlayerState->Cash = FMath::Max<int64>(0, Profile.Cash);
     PlayerState->BankBalance = FMath::Max<int64>(0, Profile.BankBalance);
     PlayerState->Reputation = Profile.Reputation;
+    if (!Profile.CharacterName.IsEmpty())
+    {
+        PlayerState->DisplayName = Profile.CharacterName;
+    }
+    if (!Profile.RegionId.IsEmpty())
+    {
+        PlayerState->RegionId = Profile.RegionId;
+    }
 }
 
 void UGrandCityPlayerProfileComponent::CaptureProfileFromPlayerState()
