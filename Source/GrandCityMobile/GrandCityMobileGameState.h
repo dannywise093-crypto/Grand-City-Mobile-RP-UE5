@@ -24,6 +24,9 @@ public:
     UPROPERTY(Replicated, BlueprintReadOnly, Category="Grand City|World")
     FName ServerId = TEXT("GC-AFRICA-01");
 
+    UPROPERTY(Replicated, BlueprintReadOnly, Category="Grand City|World")
+    bool bServerDraining = false;
+
 protected:
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeReplicatedProps) const override;
 };

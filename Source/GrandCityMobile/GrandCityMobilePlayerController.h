@@ -18,11 +18,13 @@ public:
 
     void LoadPersistentProfile(FGrandCityProfileComponentLoadResult Callback);
     void SavePersistentProfile(FGrandCityProfileComponentSaveResult Callback);
-    void SetAuthCredentials(const FString& InAuthToken, const FString& InTransferToken);
+    void SetAuthCredentials(const FString& InAuthToken, const FString& InTransferToken, const FString& InConnectionTicket = FString());
     const FString& GetAuthToken() const { return AuthToken; }
     const FString& GetTransferToken() const { return TransferToken; }
+    const FString& GetConnectionTicket() const { return ConnectionTicket; }
     void ClearAuthCredentials();
     void TravelToAuthenticatedRegion(const FString& RegionId);
+    void TravelToBestWorldwideServer();
 
 protected:
     virtual void BeginPlay() override;
@@ -51,4 +53,5 @@ private:
 
     FString AuthToken;
     FString TransferToken;
+    FString ConnectionTicket;
 };

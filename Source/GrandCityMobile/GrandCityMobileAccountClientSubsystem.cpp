@@ -105,6 +105,51 @@ void UGrandCityMobileAccountClientSubsystem::SendCredentialsRequest(const TCHAR*
     Request->ProcessRequest();
 }
 
+void UGrandCityMobileAccountClientSubsystem::RequestConnectionTicket(const FString& TargetServerId, FGrandCityConnectionTicketResult Callback)
+{
+    if (AuthToken.IsEmpty() || TargetServerId.IsEmpty())
+    {
+        Callback(false, FString(), TEXT("not_authenticated"));
+        return;
+    }
+
+    TSharedRef<IHttpRequest> Request = FHttpModule::Get().CreateRequest();
+    Request->SetURL(GetBaseUrl() / TEXT("v1/connection-tickets"));
+    Request->SetVerb(TEXT("POST"));
+    Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+    Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *AuthToken));
+
+    TSharedPtr<FJsonObject> Body = MakeShared<FJsonObject>();
+    Body->SetStringField(TEXT("targetServerId"), TargetServerId);
+
+    FString Payload;
+    const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Payload);
+    FJsonSerializer::Serialize(Body.ToSharedRef(), Writer);
+    Request->SetContentAsString(Payload);
+
+    Request->OnProcessRequestComplete().BindLambda([Callback](FHttpRequestPtr, FHttpResponsePtr Response, bool bConnected)
+    {
+        if (!bConnected || !Response.IsValid())
+        {
+            Callback(false, FString(), TEXT("network_error"));
+            return;
+        }
+
+        const TSharedPtr<FJsonObject> Json = ParseJson(Response->GetContentAsString());
+        if (!Json.IsValid() || !EHttpResponseCodes::IsOk(Response->GetResponseCode()))
+        {
+            Callback(false, FString(), ReadError(Json));
+            return;
+        }
+
+        FString Ticket;
+        Json->TryGetStringField(TEXT("ticket"), Ticket);
+        Callback(!Ticket.IsEmpty(), Ticket, Ticket.IsEmpty() ? TEXT("invalid_ticket_response") : FString());
+    });
+
+    Request->ProcessRequest();
+}
+
 void UGrandCityMobileAccountClientSubsystem::ClearSession()
 {
     Identity = FGrandCityAccountIdentity();

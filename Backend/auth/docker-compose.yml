@@ -8,6 +8,7 @@ services:
     volumes:
       - grandcity_pg:/var/lib/postgresql/data
       - ./db/001_accounts.sql:/docker-entrypoint-initdb.d/001_accounts.sql:ro
+      - ./db/002_connection_tickets.sql:/docker-entrypoint-initdb.d/002_connection_tickets.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U grandcity -d grandcity"]
       interval: 5s

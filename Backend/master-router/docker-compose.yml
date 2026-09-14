@@ -1,0 +1,24 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - grandcity_router_redis:/data
+    restart: unless-stopped
+
+  master-router:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      PORT: 8090
+      INTERNAL_API_KEY: ${MASTER_ROUTER_API_KEY:?set MASTER_ROUTER_API_KEY}
+      HEARTBEAT_TIMEOUT_MS: 15000
+      REDIS_URL: redis://redis:6379
+      REGISTRY_KEY: grandcity:router:regions
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  grandcity_router_redis:

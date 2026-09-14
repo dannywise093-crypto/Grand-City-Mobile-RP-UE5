@@ -11,6 +11,7 @@ const PORT = Number(process.env.PORT || 8080);
 const DATABASE_URL = process.env.DATABASE_URL;
 const JWT_SECRET = process.env.JWT_SECRET;
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+const CONNECTION_TICKET_TTL_SECONDS = 30;
 
 if (!DATABASE_URL || !JWT_SECRET || !INTERNAL_API_KEY) {
   throw new Error('DATABASE_URL, JWT_SECRET and INTERNAL_API_KEY are required');
@@ -19,10 +20,13 @@ if (!DATABASE_URL || !JWT_SECRET || !INTERNAL_API_KEY) {
 const pool = new Pool({ connectionString: DATABASE_URL, max: 20 });
 
 function requireInternal(req, res, next) {
-  if (req.get('x-internal-api-key') !== INTERNAL_API_KEY) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
+  if (req.get('x-internal-api-key') !== INTERNAL_API_KEY) return res.status(401).json({ error: 'unauthorized' });
   next();
+}
+
+function bearerToken(req) {
+  const header = req.get('authorization') || '';
+  return header.startsWith('Bearer ') ? header.slice(7) : '';
 }
 
 function issueToken(account) {
@@ -34,63 +38,34 @@ function issueToken(account) {
 }
 
 app.get('/health', async (_req, res) => {
-  try {
-    await pool.query('SELECT 1');
-    res.json({ ok: true, service: 'account', time: new Date().toISOString() });
-  } catch {
-    res.status(503).json({ ok: false });
-  }
+  try { await pool.query('SELECT 1'); res.json({ ok: true, service: 'account', time: new Date().toISOString() }); }
+  catch { res.status(503).json({ ok: false }); }
 });
 
 app.post('/v1/accounts/register', async (req, res) => {
   const { displayName, password } = req.body ?? {};
-  if (typeof displayName !== 'string' || displayName.length < 3 || displayName.length > 24 ||
-      typeof password !== 'string' || password.length < 8 || password.length > 128) {
-    return res.status(400).json({ error: 'invalid_registration' });
-  }
-
+  if (typeof displayName !== 'string' || displayName.length < 3 || displayName.length > 24 || typeof password !== 'string' || password.length < 8 || password.length > 128) return res.status(400).json({ error: 'invalid_registration' });
   const accountId = crypto.randomUUID();
   const passwordHash = crypto.scryptSync(password, accountId, 64).toString('hex');
-
   try {
-    const result = await pool.query(
-      `INSERT INTO accounts(account_id, display_name, password_hash)
-       VALUES ($1, $2, $3)
-       RETURNING account_id, display_name, region_id`,
-      [accountId, displayName, passwordHash]
-    );
+    const result = await pool.query(`INSERT INTO accounts(account_id, display_name, password_hash) VALUES ($1, $2, $3) RETURNING account_id, display_name, region_id`, [accountId, displayName, passwordHash]);
     const account = result.rows[0];
-    await pool.query(
-      `INSERT INTO player_profiles(account_id, character_id, character_name, region_id)
-       VALUES ($1, $2, $3, $4)`,
-      [account.account_id, `CHAR-${account.account_id}`, account.display_name, account.region_id]
-    );
+    await pool.query(`INSERT INTO player_profiles(account_id, character_id, character_name, region_id) VALUES ($1, $2, $3, $4)`, [account.account_id, `CHAR-${account.account_id}`, account.display_name, account.region_id]);
     res.status(201).json({ account, token: issueToken(account) });
   } catch (error) {
     if (error?.code === '23505') return res.status(409).json({ error: 'display_name_taken' });
-    console.error(error);
-    res.status(500).json({ error: 'registration_failed' });
+    console.error(error); res.status(500).json({ error: 'registration_failed' });
   }
 });
 
 app.post('/v1/accounts/login', async (req, res) => {
   const { displayName, password } = req.body ?? {};
-  if (typeof displayName !== 'string' || typeof password !== 'string') {
-    return res.status(400).json({ error: 'invalid_login' });
-  }
-
-  const result = await pool.query(
-    `SELECT account_id, display_name, region_id, password_hash FROM accounts WHERE display_name = $1`,
-    [displayName]
-  );
+  if (typeof displayName !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'invalid_login' });
+  const result = await pool.query(`SELECT account_id, display_name, region_id, password_hash FROM accounts WHERE display_name = $1`, [displayName]);
   const account = result.rows[0];
   if (!account) return res.status(401).json({ error: 'invalid_credentials' });
-
   const expected = crypto.scryptSync(password, account.account_id, 64).toString('hex');
-  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(account.password_hash))) {
-    return res.status(401).json({ error: 'invalid_credentials' });
-  }
-
+  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(account.password_hash))) return res.status(401).json({ error: 'invalid_credentials' });
   await pool.query(`UPDATE accounts SET last_login_at = NOW() WHERE account_id = $1`, [account.account_id]);
   res.json({ account: { account_id: account.account_id, display_name: account.display_name, region_id: account.region_id }, token: issueToken(account) });
 });
@@ -98,101 +73,76 @@ app.post('/v1/accounts/login', async (req, res) => {
 app.post('/v1/auth/verify', requireInternal, async (req, res) => {
   try {
     const payload = jwt.verify(req.body?.token, JWT_SECRET, { issuer: 'grand-city-account-service', audience: 'grand-city-servers' });
-    const result = await pool.query(
-      `SELECT account_id, display_name, region_id FROM accounts WHERE account_id = $1`,
-      [payload.sub]
-    );
+    const result = await pool.query(`SELECT account_id, display_name, region_id FROM accounts WHERE account_id = $1`, [payload.sub]);
     if (!result.rows[0]) return res.status(401).json({ error: 'account_not_found' });
     res.json({ valid: true, account: result.rows[0] });
-  } catch {
-    res.status(401).json({ valid: false });
-  }
+  } catch { res.status(401).json({ valid: false }); }
+});
+
+app.post('/v1/connection-tickets', async (req, res) => {
+  try {
+    const payload = jwt.verify(bearerToken(req), JWT_SECRET, { issuer: 'grand-city-account-service', audience: 'grand-city-servers' });
+    const { targetServerId } = req.body ?? {};
+    if (!targetServerId || typeof targetServerId !== 'string') return res.status(400).json({ error: 'invalid_target_server' });
+    const account = await pool.query(`SELECT account_id FROM accounts WHERE account_id = $1`, [payload.sub]);
+    if (!account.rows[0]) return res.status(401).json({ error: 'account_not_found' });
+    const rawTicket = crypto.randomBytes(32).toString('base64url');
+    const ticketHash = crypto.createHash('sha256').update(rawTicket).digest('hex');
+    await pool.query(`DELETE FROM connection_tickets WHERE expires_at <= NOW()`, []);
+    await pool.query(`INSERT INTO connection_tickets(ticket_hash, account_id, target_server_id, expires_at) VALUES ($1, $2, $3, NOW() + INTERVAL '30 seconds')`, [ticketHash, payload.sub, targetServerId]);
+    res.json({ ticket: rawTicket, expiresInSeconds: CONNECTION_TICKET_TTL_SECONDS, serverId: targetServerId });
+  } catch { res.status(401).json({ error: 'invalid_auth_token' }); }
+});
+
+app.post('/v1/connection-tickets/consume', requireInternal, async (req, res) => {
+  const { ticket, serverId } = req.body ?? {};
+  if (!ticket || !serverId) return res.status(400).json({ error: 'invalid_ticket_request' });
+  const ticketHash = crypto.createHash('sha256').update(ticket).digest('hex');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(`DELETE FROM connection_tickets t USING accounts a WHERE t.account_id = a.account_id AND t.ticket_hash = $1 AND t.target_server_id = $2 AND t.expires_at > NOW() RETURNING t.account_id, t.target_server_id, a.display_name, a.region_id`, [ticketHash, serverId]);
+    if (!result.rows[0]) { await client.query('ROLLBACK'); return res.status(401).json({ error: 'invalid_or_expired_ticket' }); }
+    await client.query('COMMIT');
+    res.json({ valid: true, accountId: result.rows[0].account_id, serverId: result.rows[0].target_server_id, displayName: result.rows[0].display_name, regionId: result.rows[0].region_id });
+  } catch (error) {
+    await client.query('ROLLBACK'); console.error(error); res.status(500).json({ error: 'ticket_consume_failed' });
+  } finally { client.release(); }
 });
 
 app.post('/v1/transfers/lock', requireInternal, async (req, res) => {
   const { accountId, sourceServerId, targetServerId } = req.body ?? {};
-  if (!accountId || !sourceServerId || !targetServerId || sourceServerId === targetServerId) {
-    return res.status(400).json({ error: 'invalid_transfer' });
-  }
-
+  if (!accountId || !sourceServerId || !targetServerId || sourceServerId === targetServerId) return res.status(400).json({ error: 'invalid_transfer' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const lock = await client.query(
-      `SELECT account_id, active_server_id, transfer_token
-       FROM account_sessions WHERE account_id = $1 FOR UPDATE`,
-      [accountId]
-    );
-    if (!lock.rows[0] || lock.rows[0].active_server_id !== sourceServerId) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'source_session_not_active' });
-    }
+    const lock = await client.query(`SELECT account_id, active_server_id FROM account_sessions WHERE account_id = $1 FOR UPDATE`, [accountId]);
+    if (!lock.rows[0] || lock.rows[0].active_server_id !== sourceServerId) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'source_session_not_active' }); }
     const transferToken = crypto.randomUUID();
-    await client.query(
-      `UPDATE account_sessions
-       SET transfer_token = $2, transfer_target_server_id = $3, transfer_started_at = NOW()
-       WHERE account_id = $1`,
-      [accountId, transferToken, targetServerId]
-    );
-    await client.query('COMMIT');
-    res.json({ transferToken });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error(error);
-    res.status(500).json({ error: 'transfer_lock_failed' });
-  } finally {
-    client.release();
-  }
+    await client.query(`UPDATE account_sessions SET transfer_token = $2, transfer_target_server_id = $3, transfer_started_at = NOW() WHERE account_id = $1`, [accountId, transferToken, targetServerId]);
+    await client.query('COMMIT'); res.json({ transferToken });
+  } catch (error) { await client.query('ROLLBACK'); console.error(error); res.status(500).json({ error: 'transfer_lock_failed' }); }
+  finally { client.release(); }
 });
 
 app.post('/v1/sessions/claim', requireInternal, async (req, res) => {
   const { accountId, serverId, transferToken } = req.body ?? {};
   if (!accountId || !serverId) return res.status(400).json({ error: 'invalid_session' });
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const result = await client.query(
-      `SELECT transfer_token, transfer_target_server_id, active_server_id
-       FROM account_sessions WHERE account_id = $1 FOR UPDATE`,
-      [accountId]
-    );
+    const result = await client.query(`SELECT transfer_token, transfer_target_server_id, active_server_id FROM account_sessions WHERE account_id = $1 FOR UPDATE`, [accountId]);
     const current = result.rows[0];
-    if (current?.active_server_id && current.active_server_id !== serverId) {
-      if (!transferToken || current.transfer_token !== transferToken || current.transfer_target_server_id !== serverId) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'account_already_active' });
-      }
-    }
-
-    await client.query(
-      `INSERT INTO account_sessions(account_id, active_server_id, transfer_token, transfer_target_server_id)
-       VALUES ($1, $2, NULL, NULL)
-       ON CONFLICT (account_id) DO UPDATE SET
-         active_server_id = EXCLUDED.active_server_id,
-         transfer_token = NULL,
-         transfer_target_server_id = NULL,
-         transfer_started_at = NULL,
-         last_heartbeat_at = NOW()`,
-      [accountId, serverId]
-    );
-    await client.query('COMMIT');
-    res.json({ claimed: true });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error(error);
-    res.status(500).json({ error: 'session_claim_failed' });
-  } finally {
-    client.release();
-  }
+    if (current?.active_server_id && current.active_server_id !== serverId && (!transferToken || current.transfer_token !== transferToken || current.transfer_target_server_id !== serverId)) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'account_already_active' }); }
+    await client.query(`INSERT INTO account_sessions(account_id, active_server_id, transfer_token, transfer_target_server_id) VALUES ($1, $2, NULL, NULL) ON CONFLICT (account_id) DO UPDATE SET active_server_id = EXCLUDED.active_server_id, transfer_token = NULL, transfer_target_server_id = NULL, transfer_started_at = NULL, last_heartbeat_at = NOW()`, [accountId, serverId]);
+    await client.query('COMMIT'); res.json({ claimed: true });
+  } catch (error) { await client.query('ROLLBACK'); console.error(error); res.status(500).json({ error: 'session_claim_failed' }); }
+  finally { client.release(); }
 });
 
 app.post('/v1/sessions/release', requireInternal, async (req, res) => {
   const { accountId, serverId } = req.body ?? {};
-  const result = await pool.query(
-    `DELETE FROM account_sessions WHERE account_id = $1 AND active_server_id = $2`,
-    [accountId, serverId]
-  );
+  const result = await pool.query(`DELETE FROM account_sessions WHERE account_id = $1 AND active_server_id = $2`, [accountId, serverId]);
   res.json({ released: result.rowCount === 1 });
 });
 
