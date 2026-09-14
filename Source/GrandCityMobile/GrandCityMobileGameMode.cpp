@@ -33,11 +33,21 @@ void AGrandCityMobileGameMode::PostLogin(APlayerController* NewPlayer)
         PlayerState->bAuthenticated = true;
     }
 
+    if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(NewPlayer))
+    {
+        CityController->LoadPersistentProfile();
+    }
+
     UpdateOnlinePlayerCount();
 }
 
 void AGrandCityMobileGameMode::Logout(AController* Exiting)
 {
+    if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(Exiting))
+    {
+        CityController->SavePersistentProfile();
+    }
+
     Super::Logout(Exiting);
     UpdateOnlinePlayerCount();
 }
