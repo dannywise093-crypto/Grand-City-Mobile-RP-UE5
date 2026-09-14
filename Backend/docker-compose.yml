@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: grandcity
+      POSTGRES_USER: grandcity
+      POSTGRES_PASSWORD: change-me-in-production
+    volumes:
+      - grandcity_pg:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grandcity -d grandcity"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgresql://grandcity:change-me-in-production@postgres:5432/grandcity
+      GRANDCITY_INTERNAL_API_KEY: replace-with-a-long-random-secret
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  grandcity_pg:
