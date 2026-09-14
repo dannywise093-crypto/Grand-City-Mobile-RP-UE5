@@ -17,6 +17,7 @@ public:
 
 protected:
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     void MoveForward(float Value);
     void MoveRight(float Value);
@@ -24,6 +25,14 @@ protected:
     void LookUp(float Value);
     void StartSprint();
     void StopSprint();
+
+    UFUNCTION(Server, Reliable)
+    void ServerSetSprinting(bool bNewSprinting);
+
+    UFUNCTION()
+    void OnRep_Sprinting();
+
+    void ApplyMovementSpeed();
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Camera")
     TObjectPtr<USpringArmComponent> CameraBoom;
@@ -36,4 +45,7 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement")
     float SprintSpeed = 650.0f;
+
+    UPROPERTY(ReplicatedUsing=OnRep_Sprinting, BlueprintReadOnly, Category="Movement")
+    bool bIsSprinting = false;
 };
