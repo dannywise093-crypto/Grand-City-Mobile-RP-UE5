@@ -4,6 +4,7 @@
 #include "GrandCityMobileAuthWidget.h"
 #include "GrandCityMobileAccountClientSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "Misc/ConfigCacheIni.h"
 #include "GameFramework/Pawn.h"
 
 AGrandCityMobilePlayerController::AGrandCityMobilePlayerController()
@@ -35,6 +36,32 @@ void AGrandCityMobilePlayerController::BeginPlay()
             }
         }
     }
+}
+
+void AGrandCityMobilePlayerController::TravelToAuthenticatedRegion(const FString& RegionId)
+{
+    if (!IsLocalController() || AuthToken.IsEmpty())
+    {
+        return;
+    }
+
+    FString Address;
+    const FString Section = TEXT("/Script/GrandCityMobile.GrandCityRegionalServers");
+    GConfig->GetString(*Section, *RegionId, Address, GGameIni);
+
+    if (Address.IsEmpty())
+    {
+        UE_LOG(LogTemp, Error, TEXT("No regional server configured for region %s"), *RegionId);
+        return;
+    }
+
+    FString TravelURL = Address + TEXT("?AuthToken=") + FGenericPlatformHttp::UrlEncode(AuthToken);
+    if (!TransferToken.IsEmpty())
+    {
+        TravelURL += TEXT("&TransferToken=") + FGenericPlatformHttp::UrlEncode(TransferToken);
+    }
+
+    ClientTravel(TravelURL, TRAVEL_Absolute);
 }
 
 void AGrandCityMobilePlayerController::OnPossess(APawn* InPawn)
