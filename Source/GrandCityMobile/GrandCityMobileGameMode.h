@@ -16,6 +16,9 @@ class GRANDCITYMOBILE_API AGrandCityMobileGameMode : public AGameModeBase
 public:
     AGrandCityMobileGameMode();
 
+    UFUNCTION(Exec)
+    void BeginServerDrain();
+
 protected:
     virtual void BeginPlay() override;
     virtual void PostLogin(APlayerController* NewPlayer) override;
