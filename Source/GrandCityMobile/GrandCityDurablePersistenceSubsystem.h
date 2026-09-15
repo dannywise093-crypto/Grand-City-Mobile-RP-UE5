@@ -1,12 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/Function.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "GrandCityPlayerProfileTypes.h"
 #include "GrandCityDurablePersistenceSubsystem.generated.h"
 
-delegate void FGrandCityProfileLoadResult(bool bSuccess, bool bFound, const FGrandCityPlayerProfile& Profile);
-delegate void FGrandCityProfileSaveResult(bool bSuccess, const FGrandCityPlayerProfile& Profile);
+using FGrandCityProfileLoadResult = TFunction<void(bool bSuccess, bool bFound, const FGrandCityPlayerProfile& Profile)>;
+using FGrandCityProfileSaveResult = TFunction<void(bool bSuccess, const FGrandCityPlayerProfile& Profile)>;
 
 UCLASS()
 class GRANDCITYMOBILE_API UGrandCityDurablePersistenceSubsystem : public UGameInstanceSubsystem

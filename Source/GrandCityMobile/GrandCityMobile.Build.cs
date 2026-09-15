@@ -20,5 +20,6 @@ public class GrandCityMobile : ModuleRules
             "Json",
             "JsonUtilities"
         });
+        PrivateDependencyModuleNames.Add("CoreOnline");
     }
 }

@@ -1,17 +1,17 @@
 {
-  "FileVersion": 3,
-  "EngineAssociation": "5.6",
-  "Category": "Games",
-  "Description": "Grand City Mobile - Unreal Engine 5 multiplayer roleplay game.",
-  "Modules": [
-    {
-      "Name": "GrandCityMobile",
-      "Type": "Runtime",
-      "LoadingPhase": "Default"
-    }
-  ],
-  "TargetPlatforms": [
-    "Android",
-    "Windows"
-  ]
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "Games",
+	"Description": "Grand City Mobile - Unreal Engine 5 multiplayer roleplay game.",
+	"Modules": [
+		{
+			"Name": "GrandCityMobile",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"TargetPlatforms": [
+		"Android",
+		"Windows"
+	]
 }

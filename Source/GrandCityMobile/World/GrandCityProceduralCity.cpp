@@ -1,7 +1,9 @@
 #include "GrandCityProceduralCity.h"
 
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "UObject/ConstructorHelpers.h"
 
 AGrandCityProceduralCity::AGrandCityProceduralCity()

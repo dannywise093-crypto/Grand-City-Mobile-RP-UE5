@@ -3,6 +3,7 @@
 #include "GrandCityMobilePlayerState.h"
 #include "GrandCityDurablePersistenceSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 
 namespace
@@ -48,18 +49,18 @@ void UGrandCityPlayerProfileComponent::LoadProfile(FGrandCityProfileComponentLoa
                 return;
             }
 
-            AGrandCityMobilePlayerState* PlayerState = GetOwningPlayerState(this);
-            if (!PlayerState)
+            AGrandCityMobilePlayerState* CurrentPlayerState = GetOwningPlayerState(this);
+            if (!CurrentPlayerState)
             {
                 Callback(false);
                 return;
             }
 
             Profile = FGrandCityPlayerProfile();
-            Profile.AccountId = PlayerState->AccountId;
-            Profile.CharacterId = FString::Printf(TEXT("CHAR-%s"), *PlayerState->AccountId);
-            Profile.CharacterName = PlayerState->DisplayName;
-            Profile.RegionId = PlayerState->RegionId;
+            Profile.AccountId = CurrentPlayerState->AccountId;
+            Profile.CharacterId = FString::Printf(TEXT("CHAR-%s"), *CurrentPlayerState->AccountId);
+            Profile.CharacterName = CurrentPlayerState->DisplayName;
+            Profile.RegionId = CurrentPlayerState->RegionId;
             Profile.CharacterLevel = 1;
             Profile.Cash = 0;
             Profile.BankBalance = 0;
@@ -67,15 +68,15 @@ void UGrandCityPlayerProfileComponent::LoadProfile(FGrandCityProfileComponentLoa
             Profile.LastSaveUnixSeconds = FDateTime::UtcNow().ToUnixTimestamp();
             ApplyProfileToPlayerState();
 
-            UGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
-            UGrandCityDurablePersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UGrandCityDurablePersistenceSubsystem>() : nullptr;
-            if (!Persistence)
+            UGameInstance* CurrentGameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+            UGrandCityDurablePersistenceSubsystem* CurrentPersistence = CurrentGameInstance ? CurrentGameInstance->GetSubsystem<UGrandCityDurablePersistenceSubsystem>() : nullptr;
+            if (!CurrentPersistence)
             {
                 Callback(false);
                 return;
             }
 
-            Persistence->SaveProfile(Profile, [Callback](bool bSaveSuccess, const FGrandCityPlayerProfile&)
+            CurrentPersistence->SaveProfile(Profile, [Callback](bool bSaveSuccess, const FGrandCityPlayerProfile&)
             {
                 Callback(bSaveSuccess);
             });

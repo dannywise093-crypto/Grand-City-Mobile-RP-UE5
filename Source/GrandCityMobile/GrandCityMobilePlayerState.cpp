@@ -6,9 +6,9 @@ AGrandCityMobilePlayerState::AGrandCityMobilePlayerState()
     bReplicates = true;
 }
 
-void AGrandCityMobilePlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeReplicatedProps) const
+void AGrandCityMobilePlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-    Super::GetLifetimeReplicatedProps(OutLifetimeReplicatedProps);
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
     DOREPLIFETIME(AGrandCityMobilePlayerState, AccountId);
     DOREPLIFETIME(AGrandCityMobilePlayerState, DisplayName);

@@ -6,6 +6,8 @@
 
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Online/CoreOnline.h"
+#include "TimerManager.h"
 
 AGrandCityMobileGameMode::AGrandCityMobileGameMode()
 {

@@ -1,11 +1,13 @@
 #include "GrandCityDurablePersistenceSubsystem.h"
 
 #include "HttpModule.h"
+#include "GenericPlatform/GenericPlatformHttp.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 #include "Misc/ConfigCacheIni.h"
 
 namespace

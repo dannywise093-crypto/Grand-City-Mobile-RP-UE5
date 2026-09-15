@@ -1,12 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/Function.h"
 #include "Components/ActorComponent.h"
 #include "GrandCityPlayerProfileTypes.h"
 #include "GrandCityPlayerProfileComponent.generated.h"
 
-delegate void FGrandCityProfileComponentLoadResult(bool bSuccess);
-delegate void FGrandCityProfileComponentSaveResult(bool bSuccess);
+using FGrandCityProfileComponentLoadResult = TFunction<void(bool bSuccess)>;
+using FGrandCityProfileComponentSaveResult = TFunction<void(bool bSuccess)>;
 
 UCLASS(ClassGroup=(GrandCity), meta=(BlueprintSpawnableComponent))
 class GRANDCITYMOBILE_API UGrandCityPlayerProfileComponent : public UActorComponent

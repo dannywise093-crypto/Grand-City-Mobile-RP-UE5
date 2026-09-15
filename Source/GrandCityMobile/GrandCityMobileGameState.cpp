@@ -6,9 +6,9 @@ AGrandCityMobileGameState::AGrandCityMobileGameState()
     bReplicates = true;
 }
 
-void AGrandCityMobileGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeReplicatedProps) const
+void AGrandCityMobileGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-    Super::GetLifetimeReplicatedProps(OutLifetimeReplicatedProps);
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
     DOREPLIFETIME(AGrandCityMobileGameState, OnlinePlayerCount);
     DOREPLIFETIME(AGrandCityMobileGameState, ServerPopulationLimit);

@@ -25,5 +25,5 @@ public:
     FName ServerId = TEXT("GC-AFRICA-01");
 
 protected:
-    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeReplicatedProps) const override;
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };
