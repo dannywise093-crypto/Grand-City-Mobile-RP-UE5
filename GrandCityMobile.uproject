@@ -10,6 +10,12 @@
       "LoadingPhase": "Default"
     }
   ],
+  "Plugins": [
+    {
+      "Name": "GrandCityOpenAI",
+      "Enabled": true
+    }
+  ],
   "TargetPlatforms": [
     "Android",
     "Windows"
