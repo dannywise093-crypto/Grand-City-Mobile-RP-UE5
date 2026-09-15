@@ -46,42 +46,17 @@ EGrandCityDistrict AGrandCityProceduralCity::GetDistrictForBlock(int32 X, int32 
 {
     const int32 Distance = FMath::Max(FMath::Abs(X), FMath::Abs(Y));
 
-    if (Distance <= 1)
-    {
-        return EGrandCityDistrict::Downtown;
-    }
-
-    if (X < -2)
-    {
-        return EGrandCityDistrict::Industrial;
-    }
-
-    if (Y > 2)
-    {
-        return EGrandCityDistrict::Commercial;
-    }
-
-    if (X > 2)
-    {
-        return EGrandCityDistrict::Services;
-    }
-
+    if (Distance <= 1) return EGrandCityDistrict::Downtown;
+    if (X < -2) return EGrandCityDistrict::Industrial;
+    if (Y > 2) return EGrandCityDistrict::Commercial;
+    if (X > 2) return EGrandCityDistrict::Services;
     return EGrandCityDistrict::Residential;
 }
 
 bool AGrandCityProceduralCity::ShouldSpawnChurch(EGrandCityDistrict District, int32 BlockX, int32 BlockY, FRandomStream& Random) const
 {
-    if (!ChurchMesh || District == EGrandCityDistrict::Industrial)
-    {
-        return false;
-    }
-
-    // Keep the central cathedral deterministic while distributing smaller
-    // community churches through appropriate districts.
-    if (BlockX == 0 && BlockY == 0)
-    {
-        return true;
-    }
+    if (!ChurchMesh || District == EGrandCityDistrict::Industrial) return false;
+    if (BlockX == 0 && BlockY == 0) return true;
 
     float Chance = ChurchSpawnChance;
     switch (District)
@@ -91,25 +66,63 @@ bool AGrandCityProceduralCity::ShouldSpawnChurch(EGrandCityDistrict District, in
         case EGrandCityDistrict::Downtown: Chance *= 0.45f; break;
         default: break;
     }
-
     return Random.FRand() <= FMath::Clamp(Chance, 0.0f, 1.0f);
+}
+
+FGrandCityChurchDefinition AGrandCityProceduralCity::SelectChurchArchetype(EGrandCityDistrict District, int32 BlockX, int32 BlockY, FRandomStream& Random) const
+{
+    if (ChurchArchetypes.Num() == 0)
+    {
+        FGrandCityChurchDefinition DefaultDefinition;
+        DefaultDefinition.Type = (BlockX == 0 && BlockY == 0)
+            ? EGrandCityChurchType::GrandCathedral
+            : EGrandCityChurchType::Community;
+        return DefaultDefinition;
+    }
+
+    if (BlockX == 0 && BlockY == 0)
+    {
+        for (const FGrandCityChurchDefinition& Definition : ChurchArchetypes)
+        {
+            if (Definition.Type == EGrandCityChurchType::GrandCathedral)
+            {
+                return Definition;
+            }
+        }
+    }
+
+    EGrandCityChurchType PreferredType = EGrandCityChurchType::Community;
+    if (District == EGrandCityDistrict::Services)
+    {
+        PreferredType = EGrandCityChurchType::HillsideChapel;
+    }
+    else if (District == EGrandCityDistrict::Commercial)
+    {
+        PreferredType = EGrandCityChurchType::Modern;
+    }
+
+    TArray<FGrandCityChurchDefinition> Candidates;
+    for (const FGrandCityChurchDefinition& Definition : ChurchArchetypes)
+    {
+        if (Definition.Type == PreferredType || Definition.Type == EGrandCityChurchType::Community)
+        {
+            Candidates.Add(Definition);
+        }
+    }
+
+    if (Candidates.Num() == 0) Candidates = ChurchArchetypes;
+    return Candidates[Random.RandRange(0, Candidates.Num() - 1)];
 }
 
 void AGrandCityProceduralCity::GenerateCity()
 {
-    if (!Ground || !Roads || !Buildings || !Churches || !Roads->GetStaticMesh() || !Buildings->GetStaticMesh())
-    {
-        return;
-    }
+    if (!Ground || !Roads || !Buildings || !Churches || !Roads->GetStaticMesh() || !Buildings->GetStaticMesh()) return;
 
     Roads->ClearInstances();
     Buildings->ClearInstances();
     Churches->ClearInstances();
 
-    if (ChurchMesh)
-    {
-        Churches->SetStaticMesh(ChurchMesh);
-    }
+    if (ChurchMesh) Churches->SetStaticMesh(ChurchMesh);
 
     const float CellSize = BlockSize + RoadWidth;
     const float HalfWorld = (GridSize - 1) * CellSize * 0.5f;
@@ -141,17 +154,18 @@ void AGrandCityProceduralCity::GenerateCity()
             const int32 BlockY = Y - (GridSize - 2) / 2;
             const EGrandCityDistrict District = GetDistrictForBlock(BlockX, BlockY);
             const bool bChurchBlock = ShouldSpawnChurch(District, BlockX, BlockY, Random);
-
             const float CenterX = X * CellSize - HalfWorld + CellSize * 0.5f;
             const float CenterY = Y * CellSize - HalfWorld + CellSize * 0.5f;
 
             if (bChurchBlock && ChurchMesh)
             {
-                const float Scale = FMath::Max(1.0f, ChurchFootprintScale);
+                const FGrandCityChurchDefinition Church = SelectChurchArchetype(District, BlockX, BlockY, Random);
+                const float Footprint = FMath::Max(1.0f, Church.FootprintScale > 0.0f ? Church.FootprintScale : ChurchFootprintScale);
+                const float Height = FMath::Max(0.1f, Church.HeightScale);
                 Churches->AddInstance(FTransform(
                     FRotator(0.0f, Random.FRandRange(0.0f, 359.0f), 0.0f),
                     FVector(CenterX, CenterY, 0.0f),
-                    FVector(Scale, Scale, Scale)));
+                    FVector(Footprint, Footprint, Height)));
                 continue;
             }
 
@@ -159,24 +173,20 @@ void AGrandCityProceduralCity::GenerateCity()
             {
                 const float OffsetX = Random.FRandRange(-BuildingArea * 0.35f, BuildingArea * 0.35f);
                 const float OffsetY = Random.FRandRange(-BuildingArea * 0.35f, BuildingArea * 0.35f);
-
                 float DistrictMin = MinBuildingHeight;
                 float DistrictMax = MaxBuildingHeight;
 
                 if (District == EGrandCityDistrict::Downtown)
                 {
-                    DistrictMin *= 1.8f;
-                    DistrictMax *= 1.8f;
+                    DistrictMin *= 1.8f; DistrictMax *= 1.8f;
                 }
                 else if (District == EGrandCityDistrict::Industrial)
                 {
-                    DistrictMin *= 0.55f;
-                    DistrictMax *= 0.8f;
+                    DistrictMin *= 0.55f; DistrictMax *= 0.8f;
                 }
                 else if (District == EGrandCityDistrict::Residential)
                 {
-                    DistrictMin *= 0.7f;
-                    DistrictMax *= 1.15f;
+                    DistrictMin *= 0.7f; DistrictMax *= 1.15f;
                 }
 
                 const float Height = Random.FRandRange(DistrictMin, DistrictMax);
