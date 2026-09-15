@@ -7,6 +7,9 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "HAL/PlatformMisc.h"
 
 FString UGrandCityAIGatewayClient::GetBaseUrl() const
 {
@@ -17,9 +20,20 @@ FString UGrandCityAIGatewayClient::GetBaseUrl() const
 
 FString UGrandCityAIGatewayClient::GetGatewayKey() const
 {
-    FString Value;
-    GConfig->GetString(TEXT("/Script/GrandCityMobile.GrandCityAISettings"), TEXT("GatewayKey"), Value, GGameIni);
-    return Value;
+    // Never store the gateway secret in DefaultGame.ini: that config can be packaged into the client.
+    FString Value = FPlatformMisc::GetEnvironmentVariable(TEXT("GRANDCITY_AI_GATEWAY_KEY"));
+    if (!Value.IsEmpty())
+    {
+        return Value;
+    }
+
+    FString CommandLineValue;
+    if (FParse::Value(FCommandLine::Get(), TEXT("GrandCityAIGatewayKey="), CommandLineValue))
+    {
+        return CommandLineValue;
+    }
+
+    return FString();
 }
 
 void UGrandCityAIGatewayClient::SendChatRequest(const FString& RequestId, const FString& SystemPrompt, const FString& UserPrompt,
@@ -37,6 +51,13 @@ void UGrandCityAIGatewayClient::SendChatRequest(const FString& RequestId, const 
         return;
     }
 
+    const FString GatewayKey = GetGatewayKey();
+    if (GatewayKey.IsEmpty())
+    {
+        OnFailure.ExecuteIfBound(RequestId, TEXT("AI gateway server secret is not configured."));
+        return;
+    }
+
     TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
     Body->SetStringField(TEXT("request_id"), RequestId);
     Body->SetStringField(TEXT("system_prompt"), SystemPrompt);
@@ -46,17 +67,18 @@ void UGrandCityAIGatewayClient::SendChatRequest(const FString& RequestId, const 
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyString);
     FJsonSerializer::Serialize(Body, Writer);
 
+    FString Url = GetBaseUrl();
+    if (Url.EndsWith(TEXT("/")))
+    {
+        Url.LeftChopInline(1);
+    }
+    Url += TEXT("/v1/ai/chat");
+
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = FHttpModule::Get().CreateRequest();
-    Request->SetURL(GetBaseUrl() / TEXT("v1/ai/chat"));
+    Request->SetURL(Url);
     Request->SetVerb(TEXT("POST"));
     Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-
-    const FString GatewayKey = GetGatewayKey();
-    if (!GatewayKey.IsEmpty())
-    {
-        Request->SetHeader(TEXT("x-ai-gateway-key"), GatewayKey);
-    }
-
+    Request->SetHeader(TEXT("x-ai-gateway-key"), GatewayKey);
     Request->SetContentAsString(BodyString);
     Request->SetTimeout(20.0f);
 
