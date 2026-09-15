@@ -2,7 +2,6 @@
 
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "UObject/ConstructorHelpers.h"
 
 AGrandCityProceduralCity::AGrandCityProceduralCity()
 {
@@ -72,36 +71,28 @@ EGrandCityDistrict AGrandCityProceduralCity::GetDistrictForBlock(int32 X, int32 
 
 bool AGrandCityProceduralCity::ShouldSpawnChurch(EGrandCityDistrict District, int32 BlockX, int32 BlockY, FRandomStream& Random) const
 {
-    if (!ChurchMesh)
+    if (!ChurchMesh || District == EGrandCityDistrict::Industrial)
     {
         return false;
     }
 
-    // Churches are community landmarks. Keep them out of industrial blocks.
-    if (District == EGrandCityDistrict::Industrial)
+    // Keep the central cathedral deterministic while distributing smaller
+    // community churches through appropriate districts.
+    if (BlockX == 0 && BlockY == 0)
     {
-        return false;
+        return true;
     }
 
     float Chance = ChurchSpawnChance;
-
-    // A slightly higher probability creates believable community coverage.
-    if (District == EGrandCityDistrict::Residential)
+    switch (District)
     {
-        Chance *= 1.15f;
-    }
-    else if (District == EGrandCityDistrict::Commercial)
-    {
-        Chance *= 0.75f;
-    }
-    else if (District == EGrandCityDistrict::Downtown)
-    {
-        Chance *= 0.45f;
+        case EGrandCityDistrict::Residential: Chance *= 1.15f; break;
+        case EGrandCityDistrict::Commercial: Chance *= 0.75f; break;
+        case EGrandCityDistrict::Downtown: Chance *= 0.45f; break;
+        default: break;
     }
 
-    // Deterministically reserve a central civic/church landmark slot.
-    const bool bCentralLandmark = (BlockX == 0 && BlockY == 0);
-    return bCentralLandmark || Random.FRand() <= FMath::Clamp(Chance, 0.0f, 1.0f);
+    return Random.FRand() <= FMath::Clamp(Chance, 0.0f, 1.0f);
 }
 
 void AGrandCityProceduralCity::GenerateCity()
@@ -123,6 +114,7 @@ void AGrandCityProceduralCity::GenerateCity()
     const float CellSize = BlockSize + RoadWidth;
     const float HalfWorld = (GridSize - 1) * CellSize * 0.5f;
     const float WorldExtent = GridSize * CellSize + RoadWidth;
+    const float BuildingArea = BlockSize * 0.78f;
 
     Ground->SetRelativeLocation(FVector(0.0f, 0.0f, -25.0f));
     Ground->SetRelativeScale3D(FVector(WorldExtent / 100.0f, WorldExtent / 100.0f, 0.5f));
@@ -132,22 +124,14 @@ void AGrandCityProceduralCity::GenerateCity()
     for (int32 X = 0; X < GridSize; ++X)
     {
         const float XPos = X * CellSize - HalfWorld;
-        Roads->AddInstance(FTransform(
-            FRotator::ZeroRotator,
-            FVector(XPos, 0.0f, 0.0f),
-            FVector(RoadWidth / 100.0f, WorldExtent / 100.0f, 0.05f)));
+        Roads->AddInstance(FTransform(FRotator::ZeroRotator, FVector(XPos, 0.0f, 0.0f), FVector(RoadWidth / 100.0f, WorldExtent / 100.0f, 0.05f)));
     }
 
     for (int32 Y = 0; Y < GridSize; ++Y)
     {
         const float YPos = Y * CellSize - HalfWorld;
-        Roads->AddInstance(FTransform(
-            FRotator::ZeroRotator,
-            FVector(0.0f, YPos, 2.0f),
-            FVector(WorldExtent / 100.0f, RoadWidth / 100.0f, 0.05f)));
+        Roads->AddInstance(FTransform(FRotator::ZeroRotator, FVector(0.0f, YPos, 2.0f), FVector(WorldExtent / 100.0f, RoadWidth / 100.0f, 0.05f)));
     }
-
-    const float BuildingArea = BlockSize * 0.78f;
 
     for (int32 X = 0; X < GridSize - 1; ++X)
     {
@@ -163,19 +147,11 @@ void AGrandCityProceduralCity::GenerateCity()
 
             if (bChurchBlock && ChurchMesh)
             {
-                const float ChurchYaw = Random.FRandRange(0.0f, 359.0f);
-                const float ChurchScale = FMath::Max(1.0f, ChurchFootprintScale);
-
+                const float Scale = FMath::Max(1.0f, ChurchFootprintScale);
                 Churches->AddInstance(FTransform(
-                    FRotator(0.0f, ChurchYaw, 0.0f),
+                    FRotator(0.0f, Random.FRandRange(0.0f, 359.0f), 0.0f),
                     FVector(CenterX, CenterY, 0.0f),
-                    FVector(ChurchScale, ChurchScale, ChurchScale)));
-            }
-
-            // Reserve the entire block for the church campus, preventing generated
-            // buildings from overlapping the sanctuary, parking, garden and access road.
-            if (bChurchBlock)
-            {
+                    FVector(Scale, Scale, Scale)));
                 continue;
             }
 
