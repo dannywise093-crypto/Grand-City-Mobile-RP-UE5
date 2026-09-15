@@ -6,6 +6,7 @@
 
 class UInstancedStaticMeshComponent;
 class UStaticMeshComponent;
+class UStaticMesh;
 
 UENUM(BlueprintType)
 enum class EGrandCityDistrict : uint8
@@ -40,6 +41,9 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="City")
     TObjectPtr<UInstancedStaticMeshComponent> Buildings;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="City|Landmarks")
+    TObjectPtr<UInstancedStaticMeshComponent> Churches;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="City|Layout", meta=(ClampMin="3", ClampMax="25"))
     int32 GridSize = 9;
 
@@ -58,6 +62,15 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="City|Buildings", meta=(ClampMin="500.0"))
     float MaxBuildingHeight = 2200.0f;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="City|Churches", meta=(ClampMin="0.0", ClampMax="1.0"))
+    float ChurchSpawnChance = 0.18f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="City|Churches", meta=(ClampMin="1.0"))
+    float ChurchFootprintScale = 3.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="City|Churches")
+    TObjectPtr<UStaticMesh> ChurchMesh;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="City|Generation")
     int32 Seed = 20260914;
 
@@ -66,4 +79,5 @@ protected:
 
     void GenerateCity();
     EGrandCityDistrict GetDistrictForBlock(int32 X, int32 Y) const;
+    bool ShouldSpawnChurch(EGrandCityDistrict District, int32 BlockX, int32 BlockY, FRandomStream& Random) const;
 };
