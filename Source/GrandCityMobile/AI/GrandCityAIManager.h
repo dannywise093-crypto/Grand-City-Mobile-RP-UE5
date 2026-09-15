@@ -31,7 +31,7 @@ public:
 
 private:
     void SubmitRequest(const FString& RequestId, const FString& SystemPrompt, const FString& UserPrompt);
-    bool ValidateRequest(const FString& RequestId, const FString& UserPrompt) const;
+    bool ValidateRequest(const FString& RequestId, const FString& UserPrompt);
 
     TSet<FString> ActiveRequests;
 };
