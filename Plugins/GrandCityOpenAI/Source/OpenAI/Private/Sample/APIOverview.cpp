@@ -1,0 +1,1468 @@
+// OpenAI Sample, Copyright LifeEXE. All Rights Reserved.
+
+#include "Sample/APIOverview.h"
+#include "Provider/OpenAIProvider.h"
+#include "Provider/Types/AudioTypes.h"
+#include "FuncLib/OpenAIFuncLib.h"
+#include "FuncLib/ImageFuncLib.h"
+#include "Algo/ForEach.h"
+#include "API/API.h"
+#include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
+#include "Logging/StructuredLog.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogAPIOverview, All, All);
+
+// Please check which models that are compatible with each request:
+// https://platform.openai.com/docs/models/model-endpoint-compatibility
+
+AAPIOverview::AAPIOverview()
+{
+    PrimaryActorTick.bCanEverTick = false;
+
+    ActionMap.Add(EAPIOverviewAction::ListModels, [&]() { ListModels(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveModel, [&]() { RetrieveModel(); });
+    ActionMap.Add(EAPIOverviewAction::DeleteFineTunedModel, [&]() { DeleteFinedTuneModel(); });
+    ActionMap.Add(EAPIOverviewAction::CreateCompletionRequest, [&]() { CreateCompletionRequest(); });
+    ActionMap.Add(EAPIOverviewAction::CreateChatCompletionRequest, [&]() { CreateChatCompletionRequest(); });
+    ActionMap.Add(EAPIOverviewAction::CreateImageGptImage1, [&]() { CreateImageGptImage1(); });
+    ActionMap.Add(EAPIOverviewAction::CreateImageEdit, [&]() { CreateImageEdit(); });
+    ActionMap.Add(EAPIOverviewAction::CreateModerations, [&]() { CreateModerations(); });
+    ActionMap.Add(EAPIOverviewAction::CreateEmbeddings, [&]() { CreateEmbeddings(); });
+    ActionMap.Add(EAPIOverviewAction::CreateSpeech, [&]() { CreateSpeech(); });
+    ActionMap.Add(EAPIOverviewAction::CreateAudioTranscription, [&]() { CreateAudioTranscription(); });
+    ActionMap.Add(EAPIOverviewAction::CreateAudioTranscriptionVerbose, [&]() { CreateAudioTranscriptionVerbose(); });
+    ActionMap.Add(EAPIOverviewAction::CreateAudioTranslation, [&]() { CreateAudioTranslation(); });
+    ActionMap.Add(EAPIOverviewAction::CreateVoice, [&]() { CreateVoice(); });
+    ActionMap.Add(EAPIOverviewAction::UploadFile, [&]() { UploadFile(); });
+    ActionMap.Add(EAPIOverviewAction::DeleteFile, [&]() { DeleteFile(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveFile, [&]() { RetrieveFile(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveFileContent, [&]() { RetrieveFileContent(); });
+    ActionMap.Add(EAPIOverviewAction::ListFiles, [&]() { ListFiles(); });
+    ActionMap.Add(EAPIOverviewAction::ListFineTuningJobs, [&]() { ListFineTuningJobs(); });
+    ActionMap.Add(EAPIOverviewAction::ListFineTuningEvents, [&]() { ListFineTuningEvents(); });
+    ActionMap.Add(EAPIOverviewAction::ListFineTuningCheckpoints, [&]() { ListFineTuningCheckpoints(); });
+    ActionMap.Add(EAPIOverviewAction::CreateFineTuningJob, [&]() { CreateFineTuningJob(); });
+    ActionMap.Add(EAPIOverviewAction::RetriveFineTuningJob, [&]() { RetriveFineTuningJob(); });
+    ActionMap.Add(EAPIOverviewAction::CancelFineTuningJob, [&]() { CancelFineTuningJob(); });
+    ActionMap.Add(EAPIOverviewAction::PauseFineTuningJob, [&]() { PauseFineTuningJob(); });
+    ActionMap.Add(EAPIOverviewAction::ResumeFineTuningJob, [&]() { ResumeFineTuningJob(); });
+    ActionMap.Add(EAPIOverviewAction::ListBatch, [&]() { ListBatch(); });
+    ActionMap.Add(EAPIOverviewAction::CreateBatch, [&]() { CreateBatch(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveBatch, [&]() { RetrieveBatch(); });
+    ActionMap.Add(EAPIOverviewAction::CancelBatch, [&]() { CancelBatch(); });
+    ActionMap.Add(EAPIOverviewAction::CreateUpload, [&]() { CreateUpload(); });
+    ActionMap.Add(EAPIOverviewAction::AddUploadPart, [&]() { AddUploadPart(); });
+    ActionMap.Add(EAPIOverviewAction::CompleteUpload, [&]() { CompleteUpload(); });
+    ActionMap.Add(EAPIOverviewAction::CancelUpload, [&]() { CancelUpload(); });
+    ActionMap.Add(EAPIOverviewAction::SetYourOwnAPI, [&]() { SetYourOwnAPI(); });
+    ActionMap.Add(EAPIOverviewAction::CreateAssistant, [&]() { CreateAssistant(); });
+    ActionMap.Add(EAPIOverviewAction::DeleteAssistant, [&]() { DeleteAssistant(); });
+    ActionMap.Add(EAPIOverviewAction::ListAssistants, [&]() { ListAssistants(); });
+    ActionMap.Add(EAPIOverviewAction::ModifyAssistant, [&]() { ModifyAssistant(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveAssistant, [&]() { RetrieveAssistant(); });
+    ActionMap.Add(EAPIOverviewAction::CreateVideo, [&]() { CreateVideo(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveVideo, [&]() { RetrieveVideo(); });
+    ActionMap.Add(EAPIOverviewAction::ListVideos, [&]() { ListVideos(); });
+    ActionMap.Add(EAPIOverviewAction::DeleteVideo, [&]() { DeleteVideo(); });
+    ActionMap.Add(EAPIOverviewAction::RemixVideo, [&]() { RemixVideo(); });
+    ActionMap.Add(EAPIOverviewAction::DownloadVideoContent, [&]() { DownloadVideoContent(); });
+
+    ActionMap.Add(EAPIOverviewAction::CreateVectorStore, [&]() { CreateVectorStore(); });
+    ActionMap.Add(EAPIOverviewAction::ListVectorStores, [&]() { ListVectorStores(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveVectorStore, [&]() { RetrieveVectorStore(); });
+    ActionMap.Add(EAPIOverviewAction::UpdateVectorStore, [&]() { UpdateVectorStore(); });
+    ActionMap.Add(EAPIOverviewAction::DeleteVectorStore, [&]() { DeleteVectorStore(); });
+    ActionMap.Add(EAPIOverviewAction::CreateVectorStoreFile, [&]() { CreateVectorStoreFile(); });
+    ActionMap.Add(EAPIOverviewAction::ListVectorStoreFiles, [&]() { ListVectorStoreFiles(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveVectorStoreFile, [&]() { RetrieveVectorStoreFile(); });
+    ActionMap.Add(EAPIOverviewAction::DeleteVectorStoreFile, [&]() { DeleteVectorStoreFile(); });
+    ActionMap.Add(EAPIOverviewAction::CreateVectorStoreFileBatch, [&]() { CreateVectorStoreFileBatch(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveVectorStoreFileBatch, [&]() { RetrieveVectorStoreFileBatch(); });
+    ActionMap.Add(EAPIOverviewAction::CancelVectorStoreFileBatch, [&]() { CancelVectorStoreFileBatch(); });
+    ActionMap.Add(EAPIOverviewAction::SearchVectorStore, [&]() { SearchVectorStore(); });
+
+    ActionMap.Add(EAPIOverviewAction::CreateChatKitSession, [&]() { CreateChatKitSession(); });
+    ActionMap.Add(EAPIOverviewAction::CancelChatKitSession, [&]() { CancelChatKitSession(); });
+    ActionMap.Add(EAPIOverviewAction::ListChatKitThreads, [&]() { ListChatKitThreads(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveChatKitThread, [&]() { RetrieveChatKitThread(); });
+    ActionMap.Add(EAPIOverviewAction::DeleteChatKitThread, [&]() { DeleteChatKitThread(); });
+    ActionMap.Add(EAPIOverviewAction::ListChatKitThreadItems, [&]() { ListChatKitThreadItems(); });
+
+    ActionMap.Add(EAPIOverviewAction::CreateSkill, [&]() { CreateSkill(); });
+    ActionMap.Add(EAPIOverviewAction::ListSkills, [&]() { ListSkills(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveSkill, [&]() { RetrieveSkill(); });
+    ActionMap.Add(EAPIOverviewAction::UpdateSkill, [&]() { UpdateSkill(); });
+    ActionMap.Add(EAPIOverviewAction::DeleteSkill, [&]() { DeleteSkill(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveSkillContent, [&]() { RetrieveSkillContent(); });
+    ActionMap.Add(EAPIOverviewAction::CreateSkillVersion, [&]() { CreateSkillVersion(); });
+    ActionMap.Add(EAPIOverviewAction::ListSkillVersions, [&]() { ListSkillVersions(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveSkillVersion, [&]() { RetrieveSkillVersion(); });
+    ActionMap.Add(EAPIOverviewAction::DeleteSkillVersion, [&]() { DeleteSkillVersion(); });
+    ActionMap.Add(EAPIOverviewAction::RetrieveSkillVersionContent, [&]() { RetrieveSkillVersionContent(); });
+
+    ActionMap.Add(EAPIOverviewAction::CreateRealtimeClientSecret, [&]() { CreateRealtimeClientSecret(); });
+    ActionMap.Add(EAPIOverviewAction::RealtimeAcceptCall, [&]() { RealtimeAcceptCall(); });
+    ActionMap.Add(EAPIOverviewAction::RealtimeHangupCall, [&]() { RealtimeHangupCall(); });
+    ActionMap.Add(EAPIOverviewAction::RealtimeReferCall, [&]() { RealtimeReferCall(); });
+    ActionMap.Add(EAPIOverviewAction::RealtimeRejectCall, [&]() { RealtimeRejectCall(); });
+}
+
+void AAPIOverview::BeginPlay()
+{
+    Super::BeginPlay();
+
+    Provider = NewObject<UOpenAIProvider>();
+    const FString FilePath = FPaths::Combine(FPaths::ProjectDir(), TEXT("OpenAIAuth.ini"));
+    Auth = UOpenAIFuncLib::LoadAPITokensFromFile(FilePath);
+
+    if (ActionMap.Contains(Action))
+    {
+        ActionMap[Action]();
+    }
+}
+
+void AAPIOverview::ListModels()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListModelsCompleted().AddLambda(
+        [](const FListModelsResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            FString OutputString{};
+            Algo::ForEach(Response.Data, [&](const FOpenAIModel& Model) { OutputString.Append(Model.ID).Append(LINE_TERMINATOR); });
+            UE_LOGFMT(LogAPIOverview, Display, "{0}", OutputString);
+        });
+
+    Provider->ListModels(Auth);
+}
+
+void AAPIOverview::RetrieveModel()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveModelCompleted().AddLambda(
+        [](const FRetrieveModelResponse& Response, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "{0}", UOpenAIFuncLib::OpenAIModelToString(Response)); });
+    const auto ModelName = UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum::O1);
+    Provider->RetrieveModel(ModelName, Auth);
+}
+
+void AAPIOverview::DeleteFinedTuneModel()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnDeleteFineTunedModelCompleted().AddLambda(
+        [](const FDeleteFineTunedModelResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOG(LogAPIOverview, Display, TEXT("DeleteFineTunedModel request completed!"));
+        });
+
+    const FString ModelID{"curie:ft-lifeexe-2023-06-12-19-57-37"};
+    Provider->DeleteFineTunedModel(ModelID, Auth);
+}
+
+void AAPIOverview::CreateCompletionRequest()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateCompletionCompleted().AddLambda(
+        [](const FCompletionResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            FString OutputString{};
+            Algo::ForEach(Response.Choices, [&](const FChoice& Choice) { OutputString.Append(Choice.Text); });
+            UE_LOGFMT(LogAPIOverview, Display, "{0}", OutputString);
+        });
+    Provider->OnCreateCompletionStreamProgresses().AddLambda(
+        [](const TArray<FCompletionStreamResponse>& Responses, const FOpenAIResponseMetadata& Metadata)
+        {
+            FString OutputString{};
+            Algo::ForEach(Responses, [&](const FCompletionStreamResponse& StreamResponse) {  //
+                Algo::ForEach(StreamResponse.Choices, [&](const FChoice& Choice) {           //
+                    OutputString.Append(Choice.Text);
+                });
+            });
+            UE_LOGFMT(LogAPIOverview, Display, "{0}", OutputString);
+        });
+    Provider->OnCreateCompletionStreamCompleted().AddLambda(
+        [](const TArray<FCompletionStreamResponse>& Responses, const FOpenAIResponseMetadata& Metadata)  //
+        {                                                                                                //
+            UE_LOGFMT(LogAPIOverview, Display, "Stream message generation finished");
+        });
+
+    FCompletion Completion;
+    Completion.Model = UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum::GPT_3_5_Turbo_Instruct);
+    Completion.Prompt = "What is Unreal Engine?";
+    Completion.Stream = true;
+    Completion.Max_Tokens = 100;
+
+    Provider->CreateCompletion(Completion, Auth);
+}
+
+void AAPIOverview::CreateChatCompletionRequest()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateChatCompletionCompleted().AddLambda(
+        [](const FChatCompletionResponse& Response, const FOpenAIResponseMetadata& Metadata)  //
+        {                                                                                     //
+            UE_LOGFMT(LogAPIOverview, Display, "Message generation finished");
+        });
+    Provider->OnCreateChatCompletionStreamProgresses().AddLambda(
+        [](const TArray<FChatCompletionStreamResponse>& Responses, const FOpenAIResponseMetadata& Metadata)
+        {
+            FString OutputString{};
+            Algo::ForEach(Responses, [&](const FChatCompletionStreamResponse& StreamResponse) {  //
+                Algo::ForEach(StreamResponse.Choices, [&](const FChatStreamChoice& Choice) {     //
+                    OutputString.Append(Choice.Delta.Content);
+                });
+            });
+            UE_LOGFMT(LogAPIOverview, Display, "{0}", OutputString);
+        });
+    Provider->OnCreateChatCompletionStreamCompleted().AddLambda(
+        [](const TArray<FChatCompletionStreamResponse>& Responses, const FOpenAIResponseMetadata& Metadata)  //
+        {                                                                                                    //
+            UE_LOGFMT(LogAPIOverview, Display, "Stream message generation finished");
+        });
+
+    FChatCompletion ChatCompletion;
+    ChatCompletion.Model = UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum::GPT_4O);
+
+    FMessage Message;
+    Message.Role = UOpenAIFuncLib::OpenAIRoleToString(ERole::User);
+    Message.Content = "What is Unreal Engine?";
+
+    ChatCompletion.Messages.Add(Message);
+    ChatCompletion.Stream = true;
+    ChatCompletion.Max_Completion_Tokens.Set(100);
+
+    Provider->CreateChatCompletion(ChatCompletion, Auth);
+}
+
+void AAPIOverview::CreateImageGptImage1()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateImageCompleted().AddLambda(
+        [](const FImageResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            auto* ArtTexture = UImageFuncLib::Texture2DFromBytes(Response.Data[0].B64_JSON);
+            UE_LOGFMT(LogAPIOverview, Display, "{0}", Response.Data[0].B64_JSON);
+        });
+
+    FOpenAIImage Image;
+    Image.Model = UOpenAIFuncLib::OpenAIImageModelToString(EImageModelEnum::GPT_Image_1);
+    Image.N = 1;  // gpt-image-1 only supports one image at the moment.
+    Image.Prompt = "Bear with beard drinking beer";
+    Image.Size = UOpenAIFuncLib::OpenAIImageSizeGptImage1ToString(EImageSizeGptImage1::Size_1024x1024);
+    Image.Background.Set(UOpenAIFuncLib::OpenAIImageBackgroundToString(EOpenAIImageBackground::Transparent));
+    Image.Moderation.Set(UOpenAIFuncLib::OpenAIImageModerationToString(EOpenAIImageModeration::Low));
+    Image.Quality.Set(UOpenAIFuncLib::OpenAIImageQualityToString(EOpenAIImageQuality::Low));
+    Image.Output_Format.Set(UOpenAIFuncLib::OpenAIImageOutputFormatToString(EOpenAIImageOutputFormat::Png));
+    // Image.Output_Compression.Set(60);
+
+    Provider->CreateImage(Image, Auth);
+}
+
+void AAPIOverview::CreateImageEdit()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+
+    Provider->OnCreateImageEditCompleted().AddLambda(
+        [](const FImageEditResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            FString OutputString{};
+            Algo::ForEach(
+                Response.Data, [&](const FImageObject& ImageObject) { OutputString.Append(ImageObject.URL).Append(LINE_TERMINATOR); });
+            UE_LOGFMT(LogAPIOverview, Display, "{0}", OutputString);
+        });
+
+    FOpenAIImageEdit ImageEdit;
+
+    // absolute paths to your images
+    const FString ImageFilePath = FPaths::Combine(FPaths::ProjectPluginsDir(),  //
+        TEXT("OpenAI"), TEXT("Source"), TEXT("OpenAITestRunner"), TEXT("Data"), "whale.png");
+    const FString ImageMaskFilePath = FPaths::Combine(FPaths::ProjectPluginsDir(),  //
+        TEXT("OpenAI"), TEXT("Source"), TEXT("OpenAITestRunner"), TEXT("Data"), "whale_mask.png");
+
+    ImageEdit.Image.Add(FPaths::ConvertRelativePathToFull(ImageFilePath));
+    ImageEdit.Mask = FPaths::ConvertRelativePathToFull(ImageMaskFilePath);
+    ImageEdit.N = 1;
+    ImageEdit.Prompt = "Draw a hat";
+    ImageEdit.Size = UOpenAIFuncLib::OpenAIImageSizeGptImage1ToString(EImageSizeGptImage1::Size_1024x1024);
+
+    Provider->CreateImageEdit(ImageEdit, Auth);
+}
+
+void AAPIOverview::CreateModerations()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateModerationsCompleted().AddLambda(
+        [](const FModerationsResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            FString OutputString{};
+            Algo::ForEach(Response.Results,
+                [&](const FModerationResults& Results) { OutputString.Append(UOpenAIFuncLib::OpenAIModerationsToString(Results)); });
+            UE_LOGFMT(LogAPIOverview, Display, "{0}", OutputString);
+        });
+
+    FModerations Moderations;
+    Moderations.Input = {"I want to #@*! you!"};  // type your favorite phrase (=
+    Moderations.Model = "text-moderation-stable";
+    Provider->CreateModerations(Moderations, Auth);
+}
+
+void AAPIOverview::CreateEmbeddings()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateEmbeddingsCompleted().AddLambda(
+        [](const FEmbeddingsResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "CreateEmbeddings request completed!");
+        });
+
+    FEmbeddings Embeddings;
+    Embeddings.Input = {"Hello! How are you?"};
+    Embeddings.Model = UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum::Text_Embedding_Ada_002);
+    Provider->CreateEmbeddings(Embeddings, Auth);
+}
+
+void AAPIOverview::CreateSpeech()
+{
+    // Make sure that WMFCodecs plugin is enabled (Edit->Plugins->WMFCodecs)
+    const FString Format = UOpenAIFuncLib::OpenAITTSAudioFormatToString(ETTSAudioFormat::MP3);
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateSpeechCompleted().AddLambda([Format](const FSpeechResponse& Response, const FOpenAIResponseMetadata& Metadata) {  //
+        const FString Date = FDateTime::Now().ToString();
+        const FString FilePath = FPaths::Combine(FPaths::ProjectPluginsDir(), TEXT("OpenAI"), TEXT("Saved"));
+        const FString FileName = FString("speech_").Append(Date).Append(".").Append(Format);
+        const FString FileFullName = FPaths::Combine(FilePath, FileName);
+        if (FFileHelper::SaveArrayToFile(Response.Bytes, *FileFullName))
+        {
+            UE_LOGFMT(LogAPIOverview, Display, "File was successfully saved to: {0}", FileFullName);
+        }
+    });
+    FSpeech Speech;
+    Speech.Input = "Crazy fox running through the forest.";
+    Speech.Model = UOpenAIFuncLib::OpenAITTSModelToString(ETTSModel::TTS_1);
+    Speech.Response_Format = Format;
+    Speech.Speed = 1.0f;
+    Provider->CreateSpeech(Speech, Auth);
+}
+
+void AAPIOverview::CreateAudioTranscription()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateAudioTranscriptionCompleted().AddLambda(
+        [](const FAudioTranscriptionResponse& Response, const FOpenAIResponseMetadata& Metadata)  //
+        {                                                                                         //
+            UE_LOGFMT(LogAPIOverview, Display, "TranscriptionResponse: {0}", Response.Text);
+        });
+
+    FAudioTranscription AudioTranscription;
+    // https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
+    AudioTranscription.Language = "fr";
+    AudioTranscription.Model = UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum::Whisper_1);
+    AudioTranscription.Response_Format = UOpenAIFuncLib::OpenAIAudioTranscriptToString(ETranscriptFormat::JSON);
+    AudioTranscription.Temperature = 0.0f;
+    // absolute path to your file
+    AudioTranscription.File = FPaths::Combine(FPaths::ProjectPluginsDir(),  //
+        TEXT("OpenAI"), TEXT("Source"), TEXT("OpenAITestRunner"), TEXT("Data"), TEXT("bonjour.mp3"));
+    Provider->CreateAudioTranscription(AudioTranscription, Auth);
+}
+
+void AAPIOverview::CreateAudioTranscriptionVerbose()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateAudioTranscriptionVerboseCompleted().AddLambda(
+        [](const FAudioTranscriptionVerboseResponse& Response, const FOpenAIResponseMetadata& Metadata)  //
+        {                                                                                                //
+            UE_LOGFMT(LogAPIOverview, Display, "TranscriptionVerboseResponse: text:{0}", Response.Text);
+            if (Response.Segments.Num() > 0)
+            {
+                UE_LOGFMT(LogAPIOverview, Display, "TranscriptionVerboseResponse: compression:{0}", Response.Segments[0].Compression_Ratio);
+            }
+        });
+
+    FAudioTranscription AudioTranscription;
+    // https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
+    AudioTranscription.Language = "fr";
+    AudioTranscription.Model = UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum::Whisper_1);
+    AudioTranscription.Response_Format = UOpenAIFuncLib::OpenAIAudioTranscriptToString(ETranscriptFormat::Verbose_JSON);
+    AudioTranscription.Temperature = 0.0f;
+    // absolute path to your file
+    AudioTranscription.File = FPaths::Combine(FPaths::ProjectPluginsDir(),  //
+        TEXT("OpenAI"), TEXT("Source"), TEXT("OpenAITestRunner"), TEXT("Data"), TEXT("bonjour.mp3"));
+    Provider->CreateAudioTranscription(AudioTranscription, Auth);
+}
+
+void AAPIOverview::CreateAudioTranslation()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateAudioTranslationCompleted().AddLambda(
+        [](const FAudioTranslationResponse& Response, const FOpenAIResponseMetadata& Metadata)  //
+        {                                                                                       //
+            UE_LOGFMT(LogAPIOverview, Display, "{0}", Response.Text);
+        });
+
+    FAudioTranslation AudioTranslation;
+    AudioTranslation.Model = UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum::Whisper_1);
+    AudioTranslation.Response_Format = UOpenAIFuncLib::OpenAIAudioTranscriptToString(ETranscriptFormat::JSON);
+    AudioTranslation.Temperature = 0.0f;
+    // absolute path to your file
+    AudioTranslation.File = FPaths::Combine(FPaths::ProjectPluginsDir(),  //
+        TEXT("OpenAI"), TEXT("Source"), TEXT("OpenAITestRunner"), TEXT("Data"), TEXT("bonjour.mp3"));
+    Provider->CreateAudioTranslation(AudioTranslation, Auth);
+}
+
+void AAPIOverview::CreateVoice()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateVoiceCompleted().AddLambda([](const FCreateVoiceResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "CreateVoice request completed! Id:{0} Name:{1}", Response.Id, Response.Name); });
+
+    FCreateVoice CreateVoiceParams;
+    // absolute path to your audio sample file (mp3, wav, etc.)
+    CreateVoiceParams.Audio_Sample = FPaths::Combine(FPaths::ProjectPluginsDir(),  //
+        TEXT("OpenAI"), TEXT("Source"), TEXT("OpenAITestRunner"), TEXT("Data"), TEXT("hello.mp3"));
+    CreateVoiceParams.Consent =
+        "I, the copyright owner of the audio samples, hereby consent to the use of my voice in AI-generated content.";
+    CreateVoiceParams.Name = "MyCustomVoice";
+    Provider->CreateVoice(CreateVoiceParams, Auth);
+}
+
+void AAPIOverview::UploadFile()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnUploadFileCompleted().AddLambda(
+        [](const FUploadFileResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "UploadFile request completed! {0}", Response.ID);
+        });
+
+    FUploadFile UploadFile;
+    // absolute path to your file
+    const FString FilePath = FPaths::Combine(FPaths::ProjectPluginsDir(),  //
+        TEXT("OpenAI"), TEXT("Source"), TEXT("OpenAITestRunner"), TEXT("Data"), "test_file.jsonl");
+    UploadFile.File = FilePath;
+    // UploadFile.Purpose = UOpenAIFuncLib::OpenAIUploadFilePurposeToString(EUploadFilePurpose::Batch);
+    UploadFile.Purpose = UOpenAIFuncLib::OpenAIUploadFilePurposeToString(EUploadFilePurpose::FineTune);
+    Provider->UploadFile(UploadFile, Auth);
+}
+
+void AAPIOverview::DeleteFile()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnDeleteFileCompleted().AddLambda(
+        [](const FDeleteFileResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "DeleteFile request completed!");
+        });
+
+    const FString FileID{"file-xxxxxxxxxxxxxxxxxxx"};
+    Provider->DeleteFile(FileID, Auth);
+}
+
+void AAPIOverview::ListFiles()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListFilesCompleted().AddLambda(
+        [](const FListFilesResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            FString OutputString{};
+            Algo::ForEach(
+                Response.Data, [&](const FOpenAIFile& OpenAIFile) { OutputString.Append(OpenAIFile.FileName).Append(LINE_TERMINATOR); });
+            UE_LOGFMT(LogAPIOverview, Display, "ListFiles request completed! Files: {0}", OutputString);
+        });
+
+    Provider->ListFiles({}, Auth);
+}
+
+void AAPIOverview::RetrieveFile()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveFileCompleted().AddLambda([](const FRetrieveFileResponse& Response, const FOpenAIResponseMetadata& Metadata)  //
+        {                                                                                                                             //
+            UE_LOGFMT(LogAPIOverview, Display, "RetrieveFile request completed! File name: {0}", Response.FileName);
+        });
+
+    const FString FileID{"file-xxxxxxxxxxxxxxxxxxxxxxxxx"};
+    Provider->RetrieveFile(FileID, Auth);
+}
+
+void AAPIOverview::RetrieveFileContent()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveFileContentCompleted().AddLambda(
+        [](const FRetrieveFileContentResponse& Response, const FOpenAIResponseMetadata& Metadata)  //
+        {
+            //
+            UE_LOGFMT(LogAPIOverview, Display, "RetrieveFileContent request completed! File content: {0}", Response.Content);
+        });
+
+    const FString FileID{"file-xxxxxxxxxxxxxxxxxxxxxxxx"};
+    Provider->RetrieveFileContent(FileID, Auth);
+}
+
+void AAPIOverview::ListFineTuningJobs()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListFineTuningJobsCompleted().AddLambda(
+        [](const FListFineTuningJobsResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "ListFineTuningJobs request completed!");
+        });
+
+    Provider->ListFineTuningJobs(Auth);
+}
+
+void AAPIOverview::CreateFineTuningJob()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateFineTuningJobCompleted().AddLambda(
+        [](const FFineTuningJobObjectResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "CreateFineTuningJob request completed!");
+        });
+
+    FFineTuningJob FineTuningJob;
+    FineTuningJob.Model = UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum::GPT_3_5_Turbo);
+    FineTuningJob.Training_File = "file-xxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    Provider->CreateFineTuningJob(FineTuningJob, Auth);
+}
+
+void AAPIOverview::ListFineTuningEvents()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListFineTuningEventsCompleted().AddLambda(
+        [&](const FListFineTuningEventsResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "ListFineTuningEvents request completed!");
+        });
+
+    const FString JobID{"ftjob-xxxxxxxxxxxxxxxxxxxxxxxx"};
+    Provider->ListFineTuningEvents(JobID, Auth);
+}
+
+void AAPIOverview::ListFineTuningCheckpoints()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListFineTuningCheckpointsCompleted().AddLambda(
+        [&](const FListFineTuningCheckpointsResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "ListFineTuningCheckpoints request completed!");
+        });
+
+    const FString JobID{"ftjob-xxxxxxxxxxxxxxxxxxxxxxxx"};
+    Provider->ListFineTuningCheckpoints(JobID, Auth);
+}
+
+void AAPIOverview::RetriveFineTuningJob()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveFineTuningJobCompleted().AddLambda(
+        [](const FFineTuningJobObjectResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "RetriveFineTuningJob request completed!");
+        });
+
+    const FString JobID{"ftjob-xxxxxxxxxxxxxxxxxxxxxxxx"};
+    Provider->RetrieveFineTuningJob(JobID, Auth);
+}
+
+void AAPIOverview::CancelFineTuningJob()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCancelFineTuningJobCompleted().AddLambda(
+        [&](const FFineTuningJobObjectResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "CancelFineTuningJob request completed!");
+        });
+
+    const FString JobID{"ftjob-xxxxxxxxxxxxxxxxxxxxxxxxxx"};
+    Provider->CancelFineTuningJob(JobID, Auth);
+}
+
+void AAPIOverview::PauseFineTuningJob()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnPauseFineTuningJobCompleted().AddLambda(
+        [&](const FFineTuningJobObjectResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "PauseFineTuningJob request completed!");
+        });
+
+    const FString JobID{"ftjob-xxxxxxxxxxxxxxxxxxxxxxxxxx"};
+    Provider->PauseFineTuningJob(JobID, Auth);
+}
+
+void AAPIOverview::ResumeFineTuningJob()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnResumeFineTuningJobCompleted().AddLambda(
+        [&](const FFineTuningJobObjectResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "ResumeFineTuningJob request completed!");
+        });
+
+    const FString JobID{"ftjob-xxxxxxxxxxxxxxxxxxxxxxxxxx"};
+    Provider->ResumeFineTuningJob(JobID, Auth);
+}
+
+void AAPIOverview::CreateBatch()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateBatchCompleted().AddLambda(
+        [&](const FCreateBatchResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "CreateBatch request completed, id={0}", Response.Id);
+        });
+
+    FCreateBatch Batch;
+    Batch.Input_File_Id = "batch_xxxxxxxxxxxxxxxxxxxxxxxx";
+    Batch.Endpoint = UOpenAIFuncLib::OpenAIBatchEndpointToString(EBatchEndpoint::ChatCompletions);
+    Batch.Completion_Window = UOpenAIFuncLib::OpenAIBatchCompletionWindowToString(EBatchCompletionWindow::Window_24h);
+    Batch.Metadata.Add("purpose", "plugin test");
+    Batch.Metadata.Add("user_name", "John Doe");
+    Provider->CreateBatch(Batch, Auth);
+}
+
+void AAPIOverview::ListBatch()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListBatchCompleted().AddLambda(
+        [&](const FListBatchResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "ListBatch request completed!");
+        });
+    FListBatch ListBatch;
+    ListBatch.Limit.Set(20);
+    Provider->ListBatch(ListBatch, Auth);
+}
+
+void AAPIOverview::RetrieveBatch()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveBatchCompleted().AddLambda(
+        [&](const FRetrieveBatchResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "RetrieveBatch request completed!");
+        });
+    const FString BatchId = "batch_xxxxxxxxxxxxxxxxxxxxxxxx";
+    Provider->RetrieveBatch(BatchId, Auth);
+}
+
+void AAPIOverview::CancelBatch()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCancelBatchCompleted().AddLambda(
+        [&](const FCancelBatchResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "CancelBatch request completed!");
+        });
+    const FString BatchId = "batch_xxxxxxxxxxxxxxxxxxxxxxxx";
+    Provider->CancelBatch(BatchId, Auth);
+}
+
+void AAPIOverview::CreateUpload()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateUploadCompleted().AddLambda(
+        [&](const FUploadObjectResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "CreateUpload request completed! filename: {0}", Response.Filename);
+        });
+
+    FCreateUpload CreateUpload;
+    CreateUpload.Purpose = UOpenAIFuncLib::OpenAIUploadFilePurposeToString(EUploadFilePurpose::FineTune);
+    CreateUpload.Filename = "training_examples";
+    CreateUpload.Bytes = 3138;
+    CreateUpload.Mime_Type = "text/jsonl";
+    Provider->CreateUpload(CreateUpload, Auth);
+}
+
+void AAPIOverview::AddUploadPart()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnAddUploadPartCompleted().AddLambda(
+        [&](const FUploadPartObjectResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "AddUploadPart request completed! id: {0}", Response.Id);
+        });
+
+    // absolute path to your file
+    const FString FilePath = FPaths::Combine(FPaths::ProjectPluginsDir(),  //
+        TEXT("OpenAI"), TEXT("Source"), TEXT("OpenAITestRunner"), TEXT("Data"), "test_file.jsonl");
+
+    FAddUploadPart AddUploadPart;
+    AddUploadPart.Data = FPaths::ConvertRelativePathToFull(FilePath);
+    const FString UploadId = "upload_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx";  // id from create upload response
+    Provider->AddUploadPart(UploadId, AddUploadPart, Auth);
+}
+
+void AAPIOverview::CompleteUpload()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCompleteUploadCompleted().AddLambda(
+        [&](const FUploadObjectResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (= (=
+            UE_LOGFMT(LogAPIOverview, Display, "CompleteUpload request completed! id: {0}", Response.Id);
+        });
+
+    const FString UploadPartId = "part_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    FCompleteUpload CompleteUpload;
+    CompleteUpload.Part_Ids.Add(UploadPartId);
+
+    const FString UploadId = "upload_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    Provider->CompleteUpload(UploadId, CompleteUpload, Auth);
+}
+
+void AAPIOverview::CancelUpload()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCancelUploadCompleted().AddLambda(
+        [&](const FUploadObjectResponse& Response, const FOpenAIResponseMetadata& Metadata)
+        {
+            // decide what to use from the struct by yourself (=
+            UE_LOGFMT(LogAPIOverview, Display, "CancelUpload request completed! id: {0}", Response.Id);
+        });
+    const FString UploadId = "upload_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    Provider->CancelUpload(UploadId, Auth);
+}
+
+void AAPIOverview::CreateAssistant()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateAssistantCompleted().AddLambda(
+        [&](const FAssistantObjectResponse& AssistantObjectResponse, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Assistant was created! id: {0}", AssistantObjectResponse.Id); });
+
+    FCreateAssistant CreateAssistant;
+    CreateAssistant.Model = UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum::GPT_4O);
+    CreateAssistant.Instructions =
+        "You are a personal math tutor. When asked a question, write and run Python code to answer the question.";
+    CreateAssistant.Name = "Math Tutor";
+
+    FAssistantTool AssistantTool;
+    AssistantTool.Type = UOpenAIFuncLib::OpenAIAssistantToolTypeToString(EAssistantToolType::CodeInterpreter);
+    CreateAssistant.Tools.Add(AssistantTool);
+
+    Provider->CreateAssistant(CreateAssistant, Auth);
+}
+
+void AAPIOverview::DeleteAssistant()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnDeleteAssistantCompleted().AddLambda(
+        [&](const FDeleteAssistantResponse& DeleteAssistantResponse, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Assistant was deleted! id: {0}", DeleteAssistantResponse.Id); });
+
+    const FString AssistantId = "assistantId_xxxxxxxxxxxx";
+    Provider->DeleteAssistant(AssistantId, Auth);
+}
+
+void AAPIOverview::ListAssistants()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListAssistantsCompleted().AddLambda(
+        [&](const FListAssistantsResponse& ListAssistantsResponse, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Assistants count: {0}", ListAssistantsResponse.Data.Num()); });
+
+    FListAssistants ListAssistantsRequest;
+    ListAssistantsRequest.Limit = 10;
+    Provider->ListAssistants(ListAssistantsRequest, Auth);
+}
+
+void AAPIOverview::ModifyAssistant()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnModifyAssistantCompleted().AddLambda(
+        [&](const FAssistantObjectResponse& AssistantObjectResponse, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Assistant was modified: {0}", AssistantObjectResponse.Id); });
+
+    FModifyAssistant ModifyAssistant{};
+    ModifyAssistant.Description = "New description";
+    const FString AssistantId = "assistantId_xxxxxxxxxxxx";
+    Provider->ModifyAssistant(AssistantId, ModifyAssistant, Auth);
+}
+
+void AAPIOverview::RetrieveAssistant()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveAssistantCompleted().AddLambda(
+        [&](const FAssistantObjectResponse& AssistantObjectResponse, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Assistant was retrieved: {0}", AssistantObjectResponse.Id); });
+
+    const FString AssistantId = "assistantId_xxxxxxxxxxxx";
+    Provider->RetrieveAssistant(AssistantId, Auth);
+}
+
+void AAPIOverview::CreateVideo()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateVideoCompleted().AddLambda([&](const FVideoObject& VideoObject, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Video was created! id: {0}", VideoObject.Id); });
+
+    FCreateVideo CreateVideoRequest;
+    CreateVideoRequest.Prompt = "A serene mountain lake at sunset with golden reflections";
+    CreateVideoRequest.Model = UOpenAIFuncLib::OpenAIVideoModelToString(EVideoModel::Sora_2);
+    CreateVideoRequest.Seconds.Set(4);
+    CreateVideoRequest.Size.Set(UOpenAIFuncLib::OpenAIVideoSizeToString(EVideoSize::Size_720x1280));
+    // CreateVideoRequest.Input_Reference.Set("https://example.com/reference-image.jpg");
+    Provider->CreateVideo(CreateVideoRequest, Auth);
+}
+
+void AAPIOverview::RetrieveVideo()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveVideoCompleted().AddLambda([&](const FVideoObject& VideoObject, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Video retrieved: id={0} status={1}", VideoObject.Id, VideoObject.Status); });
+
+    const FString VideoId = "videoId_xxxxxxxxxxxx";
+    Provider->RetrieveVideo(VideoId, Auth);
+}
+
+void AAPIOverview::ListVideos()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListVideosCompleted().AddLambda(
+        [&](const FListVideosResponse& ListVideosResponse, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Videos count: {0}", ListVideosResponse.Data.Num()); });
+
+    FListVideos ListVideosRequest;
+    ListVideosRequest.Limit.IsSet = true;
+    ListVideosRequest.Limit.Value = 10;
+    Provider->ListVideos(ListVideosRequest, Auth);
+}
+
+void AAPIOverview::DeleteVideo()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnDeleteVideoCompleted().AddLambda(
+        [&](const FDeleteVideoResponse& DeleteVideoResponse, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Video deleted: id={0}", DeleteVideoResponse.Id); });
+
+    const FString VideoId = "videoId_xxxxxxxxxxxx";
+    Provider->DeleteVideo(VideoId, Auth);
+}
+
+void AAPIOverview::RemixVideo()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRemixVideoCompleted().AddLambda([&](const FVideoObject& VideoObject, const FOpenAIResponseMetadata& ResponseMetadata)
+        { UE_LOGFMT(LogAPIOverview, Display, "Video remixed: id={0}", VideoObject.Id); });
+
+    FRemixVideo RemixVideoRequest;
+    RemixVideoRequest.Prompt = "The same mountain lake but during a dramatic thunderstorm";
+    const FString VideoId = "videoId_xxxxxxxxxxxx";
+    Provider->RemixVideo(VideoId, RemixVideoRequest, Auth);
+}
+
+void AAPIOverview::DownloadVideoContent()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+
+    Provider->OnListVideosCompleted().AddLambda(
+        [&](const FListVideosResponse& ListVideosResponse, const FOpenAIResponseMetadata& ResponseMetadata)
+        {
+            const FVideoObject* CompletedVideo =
+                ListVideosResponse.Data.FindByPredicate([](const FVideoObject& V) { return V.Status.Equals(TEXT("completed")); });
+
+            if (!CompletedVideo)
+            {
+                UE_LOGFMT(LogAPIOverview, Warning, "No completed videos available to download");
+                return;
+            }
+
+            UE_LOGFMT(LogAPIOverview, Display, "Downloading video: id={0}", CompletedVideo->Id);
+            Provider->DownloadVideoContent(CompletedVideo->Id, FDownloadVideoContent{}, Auth);
+        });
+
+    Provider->OnDownloadVideoContentCompleted().AddLambda(
+        [](const FDownloadVideoContentResponse& DownloadVideoContentResponse, const FOpenAIResponseMetadata& ResponseMetadata)
+        {
+            const FString Date = FDateTime::Now().ToString();
+            const FString FilePath = FPaths::Combine(FPaths::ProjectPluginsDir(), TEXT("OpenAI"), TEXT("Saved"));
+            const FString FileName = FString("video_").Append(Date).Append(".mp4");
+            const FString FileFullName = FPaths::Combine(FilePath, FileName);
+            if (FFileHelper::SaveArrayToFile(DownloadVideoContentResponse.Content, *FileFullName))
+            {
+                UE_LOGFMT(LogAPIOverview, Display, "Video was successfully saved to: {0}", FileFullName);
+            }
+        });
+
+    // const FString VideoId = "videoId_xxxxxxxxxxxx";
+    // Provider->DownloadVideoContent(VideoId, FDownloadVideoContent{}, Auth);
+
+    FListVideos ListVideosRequest;
+    Provider->ListVideos(ListVideosRequest, Auth);
+}
+
+void AAPIOverview::CreateVectorStore()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateVectorStoreCompleted().AddLambda([](const FVectorStore& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Vector Store created: {0}", Response.Id); });
+
+    FCreateVectorStore CreateRequest;
+    CreateRequest.Name = "Example Vector Store";
+    Provider->CreateVectorStore(CreateRequest, Auth);
+}
+
+void AAPIOverview::ListVectorStores()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListVectorStoresCompleted().AddLambda(
+        [](const FListVectorStoresResponse& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            FString OutputString{};
+            Algo::ForEach(Response.Data, [&](const FVectorStore& VS) { OutputString.Append(VS.Id).Append(LINE_TERMINATOR); });
+            UE_LOGFMT(LogAPIOverview, Display, "Vector Stores:{0}{1}", LINE_TERMINATOR, OutputString);
+        });
+
+    Provider->ListVectorStores(FVectorStoreQueryParams{}, Auth);
+}
+
+void AAPIOverview::RetrieveVectorStore()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveVectorStoreCompleted().AddLambda([](const FVectorStore& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Vector Store retrieved: {0}, Name: {1}", Response.Id, Response.Name); });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    Provider->RetrieveVectorStore(VectorStoreId, Auth);
+}
+
+void AAPIOverview::UpdateVectorStore()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnUpdateVectorStoreCompleted().AddLambda([](const FVectorStore& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Vector Store updated: {0}, New Name: {1}", Response.Id, Response.Name); });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    FUpdateVectorStore UpdateRequest;
+    UpdateRequest.Name = "Updated Vector Store Name";
+    Provider->UpdateVectorStore(VectorStoreId, UpdateRequest, Auth);
+}
+
+void AAPIOverview::DeleteVectorStore()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnDeleteVectorStoreCompleted().AddLambda(
+        [](const FVectorStoreDeletedResponse& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            UE_LOGFMT(LogAPIOverview, Display, "Vector Store deleted: {0}, Success: {1}", Response.Id,
+                Response.Deleted ? TEXT("true") : TEXT("false"));
+        });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    Provider->DeleteVectorStore(VectorStoreId, Auth);
+}
+
+void AAPIOverview::CreateVectorStoreFile()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateVectorStoreFileCompleted().AddLambda([](const FVectorStoreFile& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Vector Store File created: {0}", Response.Id); });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    const FString FileId = "file-xxxxxxxxxxxx";
+    Provider->CreateVectorStoreFile(VectorStoreId, FileId, Auth);
+}
+
+void AAPIOverview::ListVectorStoreFiles()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListVectorStoreFilesCompleted().AddLambda(
+        [](const FListVectorStoreFilesResponse& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            FString OutputString{};
+            Algo::ForEach(Response.Data, [&](const FVectorStoreFile& File) { OutputString.Append(File.Id).Append(LINE_TERMINATOR); });
+            UE_LOGFMT(LogAPIOverview, Display, "Vector Store Files:{0}{1}", LINE_TERMINATOR, OutputString);
+        });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    Provider->ListVectorStoreFiles(VectorStoreId, FVectorStoreFileQueryParams{}, Auth);
+}
+
+void AAPIOverview::RetrieveVectorStoreFile()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveVectorStoreFileCompleted().AddLambda(
+        [](const FVectorStoreFile& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            UE_LOGFMT(LogAPIOverview, Display, "Vector Store File retrieved: {0}, Status: {1}", Response.Id,
+                UEnum::GetValueAsString(Response.Status));
+        });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    const FString FileId = "file-xxxxxxxxxxxx";
+    Provider->RetrieveVectorStoreFile(VectorStoreId, FileId, Auth);
+}
+
+void AAPIOverview::DeleteVectorStoreFile()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnDeleteVectorStoreFileCompleted().AddLambda(
+        [](const FVectorStoreDeletedResponse& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            UE_LOGFMT(LogAPIOverview, Display, "Vector Store File deleted: {0}, Success: {1}", Response.Id,
+                Response.Deleted ? TEXT("true") : TEXT("false"));
+        });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    const FString FileId = "file-xxxxxxxxxxxx";
+    Provider->DeleteVectorStoreFile(VectorStoreId, FileId, Auth);
+}
+
+void AAPIOverview::CreateVectorStoreFileBatch()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateVectorStoreFileBatchCompleted().AddLambda(
+        [](const FVectorStoreFileBatch& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Vector Store File Batch created: {0}", Response.Id); });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    FCreateVectorStoreFileBatch BatchRequest;
+    BatchRequest.File_Ids = {"file-1", "file-2"};
+    Provider->CreateVectorStoreFileBatch(VectorStoreId, BatchRequest, Auth);
+}
+
+void AAPIOverview::RetrieveVectorStoreFileBatch()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveVectorStoreFileBatchCompleted().AddLambda(
+        [](const FVectorStoreFileBatch& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            UE_LOGFMT(LogAPIOverview, Display, "Vector Store File Batch retrieved: {0}, Status: {1}", Response.Id,
+                UEnum::GetValueAsString(Response.Status));
+        });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    const FString BatchId = "vsfb_xxxxxxxxxxxx";
+    Provider->RetrieveVectorStoreFileBatch(VectorStoreId, BatchId, Auth);
+}
+
+void AAPIOverview::CancelVectorStoreFileBatch()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCancelVectorStoreFileBatchCompleted().AddLambda(
+        [](const FVectorStoreFileBatch& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Vector Store File Batch cancelled: {0}", Response.Id); });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    const FString BatchId = "vsfb_xxxxxxxxxxxx";
+    Provider->CancelVectorStoreFileBatch(VectorStoreId, BatchId, Auth);
+}
+
+void AAPIOverview::SearchVectorStore()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnSearchVectorStoreCompleted().AddLambda(
+        [](const FVectorStoreSearchResponse& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            UE_LOGFMT(LogAPIOverview, Display, "Vector Store Search completed. Results: {0}", Response.Data.Num());
+            for (const auto& Item : Response.Data)
+            {
+                UE_LOGFMT(LogAPIOverview, Display, "Result: {0}, Score: {1}", Item.File_Id, Item.Score);
+            }
+        });
+
+    const FString VectorStoreId = "vs_xxxxxxxxxxxx";
+    FVectorStoreSearch SearchRequest;
+    SearchRequest.Query = "Unreal Engine 5 features";
+    Provider->SearchVectorStore(VectorStoreId, SearchRequest, Auth);
+}
+
+void AAPIOverview::OnRequestError(const FString& URL, const FString& Content)
+{
+    UE_LOGFMT(LogAPIOverview, Error, "URL: {0}, Content: {1}", URL, Content);
+
+    const EOpenAIResponseError Code = UOpenAIFuncLib::GetErrorCode(Content);
+    const FString Messsage = UOpenAIFuncLib::GetErrorMessage(Content);
+}
+
+void AAPIOverview::SetYourOwnAPI()
+{
+    // You can specify your own endpoints. This might be useful if you're calling the OpenAI API through a proxy.
+    class MyAPI : public OpenAI::IAPI
+    {
+    public:
+        MyAPI(const FString& BaseURL = "https://api.openai.com") : API_URL(BaseURL) {}
+        virtual FString BaseURL() const override { return API_URL; }
+
+        virtual FString Models() const override { return API_URL + "/v1/models"; }
+        virtual FString Completion() const override { return API_URL + "/v1/completions"; }
+        virtual FString ChatCompletion() const override { return API_URL + "/v1/chat/completions"; }
+        virtual FString ImageGenerations() const override { return API_URL + "/v1/images/generations"; }
+        virtual FString ImageEdits() const override { return API_URL + "/v1/images/edits"; }
+        virtual FString Embeddings() const override { return API_URL + "/v1/embeddings"; }
+        virtual FString Speech() const override { return API_URL + "/v1/audio/speech"; }
+        virtual FString AudioTranscriptions() const override { return API_URL + "/v1/audio/transcriptions"; }
+        virtual FString AudioTranslations() const override { return API_URL + "/v1/audio/translations"; }
+        virtual FString AudioVoices() const override { return API_URL + "/v1/audio/voices"; }
+        virtual FString Files() const override { return API_URL + "/v1/files"; }
+        virtual FString FineTuningJobs() const override { return API_URL + "/v1/fine_tuning/jobs"; }
+        virtual FString Moderations() const override { return API_URL + "/v1/moderations"; }
+        virtual FString Batches() const override { return API_URL + "/v1/batches"; }
+        virtual FString Uploads() const override { return API_URL + "/v1/uploads"; }
+        virtual FString Assistants() const override { return API_URL + "/v1/assistants"; }
+        virtual FString Videos() const override { return API_URL + "/v1/videos"; }
+        virtual FString Evals() const override { return API_URL + "/v1/evals"; }
+        virtual FString VectorStores() const override { return API_URL + "/v1/vector_stores"; }
+        virtual FString ChatKitSessions() const override { return API_URL + "/v1/chatkit/sessions"; }
+        virtual FString ChatKitThreads() const override { return API_URL + "/v1/chatkit/threads"; }
+        virtual FString Skills() const override { return API_URL + "/v1/skills"; }
+        virtual FString RealtimeClientSecrets() const override { return API_URL + "/v1/realtime/client_secrets"; }
+        virtual FString RealtimeCalls() const override { return API_URL + "/v1/realtime/calls"; }
+
+    private:
+        const FString API_URL;
+    };
+
+    const auto API = MakeShared<MyAPI>();
+    Provider->SetAPI(API);
+}
+
+void AAPIOverview::CreateChatKitSession()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateChatKitSessionCompleted().AddLambda([](const FChatKitSessionResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "ChatKit Session created: {0}, User: {1}", Response.Id, Response.User); });
+
+    FCreateChatKitSession CreateSession;
+    CreateSession.User = "unreal_user";
+    CreateSession.Workflow.Id = "wf_example";
+    Provider->CreateChatKitSession(CreateSession, Auth);
+}
+
+void AAPIOverview::CancelChatKitSession()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCancelChatKitSessionCompleted().AddLambda([](const FChatKitSessionResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "ChatKit Session cancelled: {0}, Status: {1}", Response.Id, Response.Status); });
+
+    const FString SessionId = "sess_xxxxxxxxxxxx";
+    Provider->CancelChatKitSession(SessionId, Auth);
+}
+
+void AAPIOverview::ListChatKitThreads()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListChatKitThreadsCompleted().AddLambda([](const FListChatKitThreadsResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "ChatKit Threads count: {0}", Response.Data.Num()); });
+
+    Provider->ListChatKitThreads({}, Auth);
+}
+
+void AAPIOverview::RetrieveChatKitThread()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveChatKitThreadCompleted().AddLambda([](const FChatKitThread& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "ChatKit Thread retrieved: {0}, Title: {1}", Response.Id, Response.Title); });
+
+    const FString ThreadId = "thread_xxxxxxxxxxxx";
+    Provider->RetrieveChatKitThread(ThreadId, Auth);
+}
+
+void AAPIOverview::DeleteChatKitThread()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnDeleteChatKitThreadCompleted().AddLambda(
+        [](const FDeleteChatKitThreadResponse& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            UE_LOGFMT(LogAPIOverview, Display, "ChatKit Thread deleted: {0}, Success: {1}", Response.Id,
+                Response.Deleted ? TEXT("true") : TEXT("false"));
+        });
+
+    const FString ThreadId = "thread_xxxxxxxxxxxx";
+    Provider->DeleteChatKitThread(ThreadId, Auth);
+}
+
+void AAPIOverview::ListChatKitThreadItems()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListChatKitThreadItemsCompleted().AddLambda(
+        [](const FChatKitThreadItemListResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "ChatKit Thread Items count: {0}", Response.Data.Num()); });
+
+    const FString ThreadId = "thread_xxxxxxxxxxxx";
+    Provider->ListChatKitThreadItems(ThreadId, {}, Auth);
+}
+
+void AAPIOverview::CreateSkill()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateSkillCompleted().AddLambda([](const FCreateSkillResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Skill created: {0}, Name: {1}", Response.Id, Response.Name); });
+
+    FCreateSkill CreateSkill;
+    CreateSkill.Files = "path/to/skill.zip";  // replace with actual path
+    Provider->CreateSkill(CreateSkill, Auth);
+}
+
+void AAPIOverview::ListSkills()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListSkillsCompleted().AddLambda([](const FListSkillsResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Skills count: {0}", Response.Data.Num()); });
+
+    Provider->ListSkills({}, Auth);
+}
+
+void AAPIOverview::RetrieveSkill()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveSkillCompleted().AddLambda([](const FRetrieveSkillResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Skill retrieved: {0}, Default Version: {1}", Response.Id, Response.Default_Version); });
+
+    const FString SkillId = "skill_xxxxxxxxxxxx";
+    Provider->RetrieveSkill(SkillId, Auth);
+}
+
+void AAPIOverview::UpdateSkill()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnUpdateSkillCompleted().AddLambda([](const FUpdateSkillResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Skill updated: {0}, New Default Version: {1}", Response.Id, Response.Default_Version); });
+
+    const FString SkillId = "skill_xxxxxxxxxxxx";
+    FUpdateSkill UpdateSkill;
+    UpdateSkill.Default_Version = "2";
+    Provider->UpdateSkill(SkillId, UpdateSkill, Auth);
+}
+
+void AAPIOverview::DeleteSkill()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnDeleteSkillCompleted().AddLambda(
+        [](const FDeleteSkillResponse& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            UE_LOGFMT(
+                LogAPIOverview, Display, "Skill deleted: {0}, Success: {1}", Response.Id, Response.Deleted ? TEXT("true") : TEXT("false"));
+        });
+
+    const FString SkillId = "skill_xxxxxxxxxxxx";
+    Provider->DeleteSkill(SkillId, Auth);
+}
+
+void AAPIOverview::RetrieveSkillContent()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveSkillContentCompleted().AddLambda([](const FSkillContentResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Skill content retrieved, size: {0} bytes", Response.Bytes.Num()); });
+
+    const FString SkillId = "skill_xxxxxxxxxxxx";
+    Provider->RetrieveSkillContent(SkillId, Auth);
+}
+
+void AAPIOverview::CreateSkillVersion()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateSkillVersionCompleted().AddLambda([](const FCreateSkillVersionResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Skill Version created: {0}, Version: {1}", Response.Id, Response.Version); });
+
+    const FString SkillId = "skill_xxxxxxxxxxxx";
+    FCreateSkillVersion CreateVersion;
+    CreateVersion.Files = "path/to/skill_v2.zip";
+    Provider->CreateSkillVersion(SkillId, CreateVersion, Auth);
+}
+
+void AAPIOverview::ListSkillVersions()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnListSkillVersionsCompleted().AddLambda([](const FListSkillVersionsResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Skill Versions count: {0}", Response.Data.Num()); });
+
+    const FString SkillId = "skill_xxxxxxxxxxxx";
+    Provider->ListSkillVersions(SkillId, {}, Auth);
+}
+
+void AAPIOverview::RetrieveSkillVersion()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveSkillVersionCompleted().AddLambda(
+        [](const FRetrieveSkillVersionResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Skill Version retrieved: {0}, Name: {1}", Response.Id, Response.Name); });
+
+    const FString SkillId = "skill_xxxxxxxxxxxx";
+    const FString Version = "1";
+    Provider->RetrieveSkillVersion(SkillId, Version, Auth);
+}
+
+void AAPIOverview::DeleteSkillVersion()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnDeleteSkillVersionCompleted().AddLambda(
+        [](const FDeleteSkillVersionResponse& Response, const FOpenAIResponseMetadata& Meta)
+        {
+            UE_LOGFMT(LogAPIOverview, Display, "Skill Version deleted: {0}, Version: {1}, Success: {2}", Response.Id, Response.Version,
+                Response.Deleted ? TEXT("true") : TEXT("false"));
+        });
+
+    const FString SkillId = "skill_xxxxxxxxxxxx";
+    const FString Version = "1";
+    Provider->DeleteSkillVersion(SkillId, Version, Auth);
+}
+
+void AAPIOverview::RetrieveSkillVersionContent()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRetrieveSkillVersionContentCompleted().AddLambda(
+        [](const FSkillContentResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Skill Version content retrieved, size: {0} bytes", Response.Bytes.Num()); });
+
+    const FString SkillId = "skill_xxxxxxxxxxxx";
+    const FString Version = "1";
+    Provider->RetrieveSkillVersionContent(SkillId, Version, Auth);
+}
+
+void AAPIOverview::CreateRealtimeClientSecret()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnCreateRealtimeClientSecretCompleted().AddLambda(
+        [](const FCreateRealtimeClientSecretResponse& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Realtime Client Secret created: {0}", Response.Value); });
+
+    FCreateRealtimeClientSecret CreateSecret;
+    CreateSecret.Expires_After.Seconds = 600;
+    Provider->CreateRealtimeClientSecret(CreateSecret, Auth);
+}
+
+void AAPIOverview::RealtimeAcceptCall()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRealtimeAcceptCallCompleted().AddLambda([](const FString& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Realtime Accept Call completed: {0}", Response); });
+
+    const FString CallId = "call_xxxxxxxxxxxx";
+    FRealtimeAcceptCall AcceptCall;
+    Provider->RealtimeAcceptCall(CallId, AcceptCall, Auth);
+}
+
+void AAPIOverview::RealtimeHangupCall()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRealtimeHangupCallCompleted().AddLambda([](const FString& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Realtime Hangup Call completed: {0}", Response); });
+
+    const FString CallId = "call_xxxxxxxxxxxx";
+    Provider->RealtimeHangupCall(CallId, Auth);
+}
+
+void AAPIOverview::RealtimeReferCall()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRealtimeReferCallCompleted().AddLambda([](const FString& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Realtime Refer Call completed: {0}", Response); });
+
+    const FString CallId = "call_xxxxxxxxxxxx";
+    FRealtimeReferCall ReferCall;
+    ReferCall.Target_Uri = "tel:+14155550123";
+    Provider->RealtimeReferCall(CallId, ReferCall, Auth);
+}
+
+void AAPIOverview::RealtimeRejectCall()
+{
+    Provider->SetLogEnabled(true);
+    Provider->OnRequestError().AddUObject(this, &ThisClass::OnRequestError);
+    Provider->OnRealtimeRejectCallCompleted().AddLambda([](const FString& Response, const FOpenAIResponseMetadata& Meta)
+        { UE_LOGFMT(LogAPIOverview, Display, "Realtime Reject Call completed: {0}", Response); });
+
+    const FString CallId = "call_xxxxxxxxxxxx";
+    FRealtimeRejectCall RejectCall;
+    Provider->RealtimeRejectCall(CallId, RejectCall, Auth);
+}

@@ -1,0 +1,57 @@
+name: Vendor full UnrealOpenAI runtime source
+
+on:
+  push:
+    branches:
+      - feature/openai-ue56-android-port
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    if: ${{ !contains(github.event.head_commit.message, '[skip openai vendor]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Grand City Mobile
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream UnrealOpenAIPlugin
+        run: |
+          git clone --depth 1 https://github.com/life-exe/UnrealOpenAIPlugin.git /tmp/UnrealOpenAIPlugin
+
+      - name: Vendor complete runtime source
+        run: |
+          rm -rf Plugins/GrandCityOpenAI/Source/OpenAI
+          mkdir -p Plugins/GrandCityOpenAI/Source
+          cp -R /tmp/UnrealOpenAIPlugin/Source/OpenAI Plugins/GrandCityOpenAI/Source/OpenAI
+
+          # The original plugin targets Win64. Grand City uses the runtime source
+          # only; editor/test modules and prebuilt binaries are intentionally excluded.
+          test -f Plugins/GrandCityOpenAI/Source/OpenAI/OpenAI.Build.cs
+          find Plugins/GrandCityOpenAI/Source/OpenAI -type f | sort > /tmp/openai-runtime-files.txt
+          echo "Vendored $(wc -l < /tmp/openai-runtime-files.txt) runtime source files"
+
+      - name: Record upstream revision
+        run: |
+          mkdir -p Plugins/GrandCityOpenAI
+          printf '%s\n' "# UnrealOpenAIPlugin source provenance" > Plugins/GrandCityOpenAI/UPSTREAM.md
+          printf '%s\n' "- Repository: https://github.com/life-exe/UnrealOpenAIPlugin" >> Plugins/GrandCityOpenAI/UPSTREAM.md
+          printf '%s\n' "- Revision: $(git -C /tmp/UnrealOpenAIPlugin rev-parse HEAD)" >> Plugins/GrandCityOpenAI/UPSTREAM.md
+          printf '%s\n' "- Vendored path: Plugins/GrandCityOpenAI/Source/OpenAI" >> Plugins/GrandCityOpenAI/UPSTREAM.md
+          printf '%s\n' "- This integration preserves the upstream MIT attribution." >> Plugins/GrandCityOpenAI/UPSTREAM.md
+
+      - name: Commit vendored source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Plugins/GrandCityOpenAI/Source/OpenAI Plugins/GrandCityOpenAI/UPSTREAM.md
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+            exit 0
+          fi
+          git commit -m "Vendor full UnrealOpenAI runtime source [skip openai vendor]"
+          git push origin HEAD:feature/openai-ue56-android-port

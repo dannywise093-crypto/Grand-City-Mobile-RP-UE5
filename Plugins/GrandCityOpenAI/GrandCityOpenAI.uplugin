@@ -1,0 +1,24 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "5.8.0-grandcity-ue56",
+  "FriendlyName": "Grand City OpenAI",
+  "Description": "UE5.6/Android-safe source port of UnrealOpenAIPlugin for Grand City Mobile.",
+  "Category": "Grand City",
+  "CreatedBy": "LifeEXE / Grand City Mobile",
+  "CreatedByURL": "https://github.com/life-exe/UnrealOpenAIPlugin",
+  "DocsURL": "https://life-exe.github.io/UnrealOpenAIPlugin",
+  "SupportURL": "https://github.com/dannywise093-crypto/Grand-City-Mobile-RP-UE5",
+  "EngineVersion": "5.6.0",
+  "CanContainContent": false,
+  "Installed": false,
+  "EnabledByDefault": false,
+  "Modules": [
+    {
+      "Name": "OpenAI",
+      "Type": "Runtime",
+      "LoadingPhase": "Default",
+      "PlatformAllowList": ["Win64", "Android"]
+    }
+  ]
+}

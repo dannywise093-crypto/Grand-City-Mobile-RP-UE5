@@ -1,0 +1,945 @@
+// OpenAI Sample, Copyright LifeEXE. All Rights Reserved.
+
+#include "FuncLib/OpenAIFuncLib.h"
+#include "Internationalization/Regex.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Base64.h"
+#include "Logging/StructuredLog.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogOpenAIFuncLib, All, All);
+
+FString UOpenAIFuncLib::OpenAIAllModelToString(EAllModelEnum Model)
+{
+    switch (Model)
+    {
+        case EAllModelEnum::Whisper_1: return "whisper-1";
+        case EAllModelEnum::GPT_3_5_Turbo: return "gpt-3.5-turbo";
+        case EAllModelEnum::GPT_3_5_Turbo_16k: return "gpt-3.5-turbo-16k";
+        case EAllModelEnum::GPT_3_5_Turbo_Instruct_0914: return "gpt-3.5-turbo-instruct-0914";
+        case EAllModelEnum::GPT_3_5_Turbo_Instruct: return "gpt-3.5-turbo-instruct";
+        case EAllModelEnum::Text_Embedding_Ada_002: return "text-embedding-ada-002";
+        case EAllModelEnum::GPT_4: return "gpt-4";
+        case EAllModelEnum::GPT_4_0613: return "gpt-4-0613";
+        case EAllModelEnum::GPT_3_5_Turbo_1106: return "gpt-3.5-turbo-1106";
+        case EAllModelEnum::TTS_1: return "tts-1";
+        case EAllModelEnum::TTS_1_HD: return "tts-1-hd";
+        case EAllModelEnum::TTS_1_1106: return "tts-1-1106";
+        case EAllModelEnum::TTS_1_HD_1106: return "tts-1-hd-1106";
+        case EAllModelEnum::Text_Embedding_3_Large: return "text-embedding-3-large";
+        case EAllModelEnum::GPT_3_5_Turbo_0125: return "gpt-3.5-turbo-0125";
+        case EAllModelEnum::Text_Embedding_3_Small: return "text-embedding-3-small";
+        case EAllModelEnum::GPT_4O_2024_05_13: return "gpt-4o-2024-05-13";
+        case EAllModelEnum::GPT_4O: return "gpt-4o";
+        case EAllModelEnum::GPT_4_Turbo_2024_04_09: return "gpt-4-turbo-2024-04-09";
+        case EAllModelEnum::GPT_4_Turbo: return "gpt-4-turbo";
+        case EAllModelEnum::GPT_4O_Mini: return "gpt-4o-mini";
+        case EAllModelEnum::GPT_4O_Mini_2024_07_18: return "gpt-4o-mini-2024-07-18";
+        case EAllModelEnum::GPT_4O_2024_08_06: return "gpt-4o-2024-08-06";
+        case EAllModelEnum::Omni_Moderation_Latest: return "omni-moderation-latest";
+        case EAllModelEnum::Omni_Moderation_2024_09_26: return "omni-moderation-2024-09-26";
+        case EAllModelEnum::O1: return "o1";
+        case EAllModelEnum::O1_2024_12_17: return "o1-2024-12-17";
+        case EAllModelEnum::O3_Mini_2025_01_31: return "o3-mini-2025-01-31";
+        case EAllModelEnum::O3_Mini: return "o3-mini";
+        case EAllModelEnum::GPT_4O_2024_11_20: return "gpt-4o-2024-11-20";
+        case EAllModelEnum::O4_Mini_Deep_Research: return "o4-mini-deep-research";
+        case EAllModelEnum::GPT_4O_Mini_Transcribe: return "gpt-4o-mini-transcribe";
+        case EAllModelEnum::GPT_4O_Mini_TTS: return "gpt-4o-mini-tts";
+        case EAllModelEnum::GPT_4O_Mini_Search_Preview: return "gpt-4o-mini-search-preview";
+        case EAllModelEnum::GPT_4O_Search_Preview: return "gpt-4o-search-preview";
+        case EAllModelEnum::GPT_4O_Mini_Search_Preview_2025_03_11: return "gpt-4o-mini-search-preview-2025-03-11";
+        case EAllModelEnum::GPT_4O_Search_Preview_2025_03_11: return "gpt-4o-search-preview-2025-03-11";
+        case EAllModelEnum::O1_Pro_2025_03_19: return "o1-pro-2025-03-19";
+        case EAllModelEnum::O1_Pro: return "o1-pro";
+        case EAllModelEnum::GPT_4O_Transcribe: return "gpt-4o-transcribe";
+        case EAllModelEnum::GPT_4_1_Nano_2025_04_14: return "gpt-4.1-nano-2025-04-14";
+        case EAllModelEnum::GPT_4_1_2025_04_14: return "gpt-4.1-2025-04-14";
+        case EAllModelEnum::GPT_4_1: return "gpt-4.1";
+        case EAllModelEnum::GPT_4_1_Mini: return "gpt-4.1-mini";
+        case EAllModelEnum::GPT_4_1_Mini_2025_04_14: return "gpt-4.1-mini-2025-04-14";
+        case EAllModelEnum::GPT_4_1_Nano: return "gpt-4.1-nano";
+        case EAllModelEnum::O4_Mini: return "o4-mini";
+        case EAllModelEnum::O4_Mini_2025_04_16: return "o4-mini-2025-04-16";
+        case EAllModelEnum::GPT_Image_1: return "gpt-image-1";
+        case EAllModelEnum::Computer_Use_Preview: return "computer-use-preview";
+        case EAllModelEnum::Computer_Use_Preview_2025_03_11: return "computer-use-preview-2025-03-11";
+        case EAllModelEnum::O4_Mini_Deep_Research_2025_06_26: return "o4-mini-deep-research-2025-06-26";
+        case EAllModelEnum::GPT_5_Nano_2025_08_07: return "gpt-5-nano-2025-08-07";
+        case EAllModelEnum::Sora_2: return "sora-2";
+        case EAllModelEnum::Sora_2_Pro: return "sora-2-pro";
+        case EAllModelEnum::GPT_Realtime_Mini: return "gpt-realtime-mini";
+        case EAllModelEnum::O3_2025_04_16: return "o3-2025-04-16";
+        case EAllModelEnum::O3: return "o3";
+        case EAllModelEnum::GPT_5_Nano: return "gpt-5-nano";
+        case EAllModelEnum::GPT_5_Mini: return "gpt-5-mini";
+        case EAllModelEnum::GPT_5_Mini_2025_08_07: return "gpt-5-mini-2025-08-07";
+        case EAllModelEnum::GPT_5: return "gpt-5";
+        case EAllModelEnum::GPT_5_1_2025_11_13: return "gpt-5.1-2025-11-13";
+        case EAllModelEnum::GPT_5_Codex: return "gpt-5-codex";
+        case EAllModelEnum::GPT_5_2025_08_07: return "gpt-5-2025-08-07";
+        case EAllModelEnum::GPT_5_1_Codex_Mini: return "gpt-5.1-codex-mini";
+        case EAllModelEnum::GPT_5_Search_Api: return "gpt-5-search-api";
+        case EAllModelEnum::GPT_5_1_Chat_Latest: return "gpt-5.1-chat-latest";
+        case EAllModelEnum::GPT_4O_Transcribe_Diarize: return "gpt-4o-transcribe-diarize";
+        case EAllModelEnum::GPT_5_Search_Api_2025_10_14: return "gpt-5-search-api-2025-10-14";
+        case EAllModelEnum::GPT_5_1_Codex: return "gpt-5.1-codex";
+        case EAllModelEnum::GPT_5_Pro: return "gpt-5-pro";
+        case EAllModelEnum::GPT_5_Pro_2025_10_06: return "gpt-5-pro-2025-10-06";
+        case EAllModelEnum::GPT_5_Chat_Latest: return "gpt-5-chat-latest";
+        case EAllModelEnum::GPT_Audio_Mini: return "gpt-audio-mini";
+        case EAllModelEnum::GPT_Audio_Mini_2025_10_06: return "gpt-audio-mini-2025-10-06";
+        case EAllModelEnum::GPT_5_1: return "gpt-5.1";
+        case EAllModelEnum::GPT_Realtime_2025_08_28: return "gpt-realtime-2025-08-28";
+        case EAllModelEnum::GPT_Realtime: return "gpt-realtime";
+        case EAllModelEnum::GPT_Audio: return "gpt-audio";
+        case EAllModelEnum::GPT_Audio_2025_08_28: return "gpt-audio-2025-08-28";
+        case EAllModelEnum::GPT_Image_1_Mini: return "gpt-image-1-mini";
+        case EAllModelEnum::GPT_5_2_Codex: return "gpt-5.2-codex";
+        case EAllModelEnum::GPT_4O_Mini_TTS_2025_12_15: return "gpt-4o-mini-tts-2025-12-15";
+        case EAllModelEnum::GPT_Realtime_Mini_2025_12_15: return "gpt-realtime-mini-2025-12-15";
+        case EAllModelEnum::GPT_Audio_Mini_2025_12_15: return "gpt-audio-mini-2025-12-15";
+        case EAllModelEnum::ChatGPT_Image_Latest: return "chatgpt-image-latest";
+        case EAllModelEnum::GPT_5_1_Codex_Max: return "gpt-5.1-codex-max";
+        case EAllModelEnum::GPT_Image_1_5: return "gpt-image-1.5";
+        case EAllModelEnum::GPT_5_2_2025_12_11: return "gpt-5.2-2025-12-11";
+        case EAllModelEnum::GPT_5_2: return "gpt-5.2";
+        case EAllModelEnum::GPT_5_2_Pro_2025_12_11: return "gpt-5.2-pro-2025-12-11";
+        case EAllModelEnum::GPT_5_2_Pro: return "gpt-5.2-pro";
+        case EAllModelEnum::GPT_5_2_Chat_Latest: return "gpt-5.2-chat-latest";
+        case EAllModelEnum::GPT_4O_Mini_Transcribe_2025_12_15: return "gpt-4o-mini-transcribe-2025-12-15";
+        case EAllModelEnum::GPT_4O_Mini_Transcribe_2025_03_20: return "gpt-4o-mini-transcribe-2025-03-20";
+        case EAllModelEnum::GPT_4O_Mini_TTS_2025_03_20: return "gpt-4o-mini-tts-2025-03-20";
+        case EAllModelEnum::GPT_5_3_Codex: return "gpt-5.3-codex";
+        case EAllModelEnum::GPT_Realtime_1_5: return "gpt-realtime-1.5";
+        case EAllModelEnum::GPT_Audio_1_5: return "gpt-audio-1.5";
+        case EAllModelEnum::GPT_5_3_Chat_Latest: return "gpt-5.3-chat-latest";
+        case EAllModelEnum::GPT_5_4_2026_03_05: return "gpt-5.4-2026-03-05";
+        case EAllModelEnum::GPT_5_4_Pro: return "gpt-5.4-pro";
+        case EAllModelEnum::GPT_5_4_Pro_2026_03_05: return "gpt-5.4-pro-2026-03-05";
+        case EAllModelEnum::GPT_5_4: return "gpt-5.4";
+        case EAllModelEnum::GPT_5_4_Nano_2026_03_17: return "gpt-5.4-nano-2026-03-17";
+        case EAllModelEnum::GPT_5_4_Nano: return "gpt-5.4-nano";
+        case EAllModelEnum::GPT_5_4_Mini_2026_03_17: return "gpt-5.4-mini-2026-03-17";
+        case EAllModelEnum::GPT_5_4_Mini: return "gpt-5.4-mini";
+        case EAllModelEnum::GPT_Image_2: return "gpt-image-2";
+        case EAllModelEnum::GPT_Image_2_2026_04_21: return "gpt-image-2-2026-04-21";
+        case EAllModelEnum::GPT_5_5: return "gpt-5.5";
+        case EAllModelEnum::GPT_5_5_2026_04_23: return "gpt-5.5-2026-04-23";
+        case EAllModelEnum::GPT_5_5_Pro: return "gpt-5.5-pro";
+        case EAllModelEnum::GPT_5_5_Pro_2026_04_23: return "gpt-5.5-pro-2026-04-23";
+        case EAllModelEnum::Chat_Latest: return "chat-latest";
+        case EAllModelEnum::GPT_Realtime_Translate: return "gpt-realtime-translate";
+        case EAllModelEnum::GPT_Realtime_2: return "gpt-realtime-2";
+        case EAllModelEnum::GPT_Realtime_Whisper: return "gpt-realtime-whisper";
+        case EAllModelEnum::GPT_5_6_Sol: return "gpt-5.6-sol";
+        case EAllModelEnum::GPT_5_6_Terra: return "gpt-5.6-terra";
+        case EAllModelEnum::GPT_5_6_Luna: return "gpt-5.6-luna";
+        case EAllModelEnum::GPT_Realtime_2_1: return "gpt-realtime-2.1";
+        case EAllModelEnum::GPT_Realtime_2_1_Mini: return "gpt-realtime-2.1-mini";
+        case EAllModelEnum::GPT_Transcribe: return "gpt-transcribe";
+        case EAllModelEnum::GPT_Live_Transcribe: return "gpt-live-transcribe";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIMainModelToString(EMainModelEnum Model)
+{
+    switch (Model)
+    {
+        case EMainModelEnum::GPT_4O: return "gpt-4o";
+        case EMainModelEnum::GPT_4: return "gpt-4";
+        case EMainModelEnum::GPT_4O_Mini: return "gpt-4o-mini";
+        case EMainModelEnum::O1: return "o1";
+        case EMainModelEnum::O3: return "o3";
+        case EMainModelEnum::O3_Mini: return "o3-mini";
+        case EMainModelEnum::GPT_4_1: return "gpt-4.1";
+        case EMainModelEnum::GPT_4_1_Mini: return "gpt-4.1-mini";
+        case EMainModelEnum::GPT_4_1_Nano: return "gpt-4.1-nano";
+        case EMainModelEnum::O4_Mini: return "o4-mini";
+        case EMainModelEnum::GPT_5_Nano: return "gpt-5-nano";
+        case EMainModelEnum::GPT_5_Mini: return "gpt-5-mini";
+        case EMainModelEnum::GPT_5: return "gpt-5";
+        case EMainModelEnum::GPT_5_1: return "gpt-5.1";
+        case EMainModelEnum::GPT_5_Pro: return "gpt-5-pro";
+        case EMainModelEnum::GPT_5_Codex: return "gpt-5-codex";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIModerationModelToString(EModerationsModelEnum Model)
+{
+    switch (Model)
+    {
+        case EModerationsModelEnum::Text_Moderation_Latest: return "text-moderation-latest";
+        case EModerationsModelEnum::Omni_Moderation_Latest: return "omni-moderation-latest";
+        case EModerationsModelEnum::Omni_Moderation_2024_09_26: return "omni-moderation-2024-09-26";
+    }
+    checkNoEntry();
+    return {};
+}
+
+bool UOpenAIFuncLib::ModelSupportsVision(const FString& Model)
+{
+    return OpenAIAllModelToString(EAllModelEnum::O1).Equals(Model) ||  //
+           OpenAIAllModelToString(EAllModelEnum::GPT_4O).Equals(Model) ||
+           OpenAIAllModelToString(EAllModelEnum::GPT_4O_Mini).Equals(Model) ||
+           OpenAIAllModelToString(EAllModelEnum::GPT_4_Turbo).Equals(Model);
+}
+
+FString UOpenAIFuncLib::OpenAIAudioModelToString(EAudioModel Model)
+{
+    switch (Model)
+    {
+        case EAudioModel::Whisper_1: return "whisper-1";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAITTSModelToString(ETTSModel Model)
+{
+    switch (Model)
+    {
+        case ETTSModel::TTS_1: return "tts-1";
+        case ETTSModel::TTS_1_HD: return "tts-1-hd";
+        case ETTSModel::GPT_4O_MINI_TTS: return "gpt-4o-mini-tts";
+        case ETTSModel::GPT_4O_MINI_TTS_2025_12_15: return "gpt-4o-mini-tts-2025-12-15";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIVoiceToString(EVoice Voice)
+{
+    switch (Voice)
+    {
+        case EVoice::Alloy: return "alloy";
+        case EVoice::Ash: return "ash";
+        case EVoice::Ballad: return "ballad";
+        case EVoice::Cedar: return "cedar";
+        case EVoice::Coral: return "coral";
+        case EVoice::Echo: return "echo";
+        case EVoice::Fable: return "fable";
+        case EVoice::Marin: return "marin";
+        case EVoice::Nova: return "nova";
+        case EVoice::Onyx: return "onyx";
+        case EVoice::Sage: return "sage";
+        case EVoice::Shimmer: return "shimmer";
+        case EVoice::Verse: return "verse";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAITTSAudioFormatToString(ETTSAudioFormat Format)
+{
+    switch (Format)
+    {
+        case ETTSAudioFormat::AAC: return "aac";
+        case ETTSAudioFormat::FLAC: return "flac";
+        case ETTSAudioFormat::MP3: return "mp3";
+        case ETTSAudioFormat::OPUS: return "opus";
+        case ETTSAudioFormat::WAV: return "wav";
+        case ETTSAudioFormat::PCM: return "pcm";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIImageModelToString(EImageModelEnum Model)
+{
+    switch (Model)
+    {
+        case EImageModelEnum::GPT_Image_1: return "gpt-image-1";
+        case EImageModelEnum::GPT_Image_1_Mini: return "gpt-image-1-mini";
+        case EImageModelEnum::GPT_Image_1_5: return "gpt-image-1.5";
+        case EImageModelEnum::ChatGPT_Image_Latest: return "chatgpt-image-latest";
+    }
+    checkNoEntry();
+    return {};
+}
+
+EImageModelEnum UOpenAIFuncLib::StringToOpenAIImageModel(const FString& Model)
+{
+    if (Model.Equals("gpt-image-1")) return EImageModelEnum::GPT_Image_1;
+    if (Model.Equals("gpt-image-1-mini")) return EImageModelEnum::GPT_Image_1_Mini;
+    if (Model.Equals("gpt-image-1.5")) return EImageModelEnum::GPT_Image_1_5;
+    if (Model.Equals("chatgpt-image-latest")) return EImageModelEnum::ChatGPT_Image_Latest;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown EImageModelEnum: {0}", Model);
+    checkNoEntry();
+
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIImageSizeGptImage1ToString(EImageSizeGptImage1 ImageSize)
+{
+    switch (ImageSize)
+    {
+        case EImageSizeGptImage1::Auto: return "auto";
+        case EImageSizeGptImage1::Size_1024x1024: return "1024x1024";
+        case EImageSizeGptImage1::Size_1024x1536: return "1024x1536";
+        case EImageSizeGptImage1::Size_1536x1024: return "1536x1024";
+    }
+    checkNoEntry();
+    return {};
+}
+
+EImageSizeGptImage1 UOpenAIFuncLib::StringToOpenAIImageSizeGptImage1(const FString& ImageSize)
+{
+    if (ImageSize.Equals("auto")) return EImageSizeGptImage1::Auto;
+    if (ImageSize.Equals("1024x1024")) return EImageSizeGptImage1::Size_1024x1024;
+    if (ImageSize.Equals("1024x1536")) return EImageSizeGptImage1::Size_1024x1536;
+    if (ImageSize.Equals("1536x1024")) return EImageSizeGptImage1::Size_1536x1024;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown EImageSizeGptImage1: {0}", ImageSize);
+    checkNoEntry();
+
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIImageFormatToString(EOpenAIImageFormat ImageFormat)
+{
+    switch (ImageFormat)
+    {
+        case EOpenAIImageFormat::URL: return "url";
+        case EOpenAIImageFormat::B64_JSON: return "b64_json";
+    }
+    checkNoEntry();
+    return {};
+}
+
+EOpenAIImageFormat UOpenAIFuncLib::StringToOpenAIImageFormat(const FString& ImageFormat)
+{
+    if (ImageFormat.Equals("url")) return EOpenAIImageFormat::URL;
+    if (ImageFormat.Equals("b64_json")) return EOpenAIImageFormat::B64_JSON;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown EOpenAIImageFormat: {0}", ImageFormat);
+    checkNoEntry();
+
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIImageQualityToString(EOpenAIImageQuality ImageQuality)
+{
+    switch (ImageQuality)
+    {
+        case EOpenAIImageQuality::Auto: return "auto";
+        case EOpenAIImageQuality::High: return "high";
+        case EOpenAIImageQuality::Medium: return "medium";
+        case EOpenAIImageQuality::Low: return "low";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIImageOutputFormatToString(EOpenAIImageOutputFormat ImageOutputFormat)
+{
+    switch (ImageOutputFormat)
+    {
+        case EOpenAIImageOutputFormat::Jpeg: return "jpeg";
+        case EOpenAIImageOutputFormat::Png: return "png";
+        case EOpenAIImageOutputFormat::Webp: return "webp";
+    }
+    checkNoEntry();
+    return {};
+}
+
+EOpenAIImageQuality UOpenAIFuncLib::StringToOpenAIImageQuality(const FString& ImageQuality)
+{
+    if (ImageQuality.Equals("auto")) return EOpenAIImageQuality::Auto;
+    if (ImageQuality.Equals("high")) return EOpenAIImageQuality::High;
+    if (ImageQuality.Equals("medium")) return EOpenAIImageQuality::Medium;
+    if (ImageQuality.Equals("low")) return EOpenAIImageQuality::Low;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown EOpenAIImageQuality: {0}", ImageQuality);
+    checkNoEntry();
+
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIImageBackgroundToString(EOpenAIImageBackground ImageBackground)
+{
+    switch (ImageBackground)
+    {
+        case EOpenAIImageBackground::Auto: return "auto";
+        case EOpenAIImageBackground::Transparent: return "transparent";
+        case EOpenAIImageBackground::Opaque: return "opaque";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIImageModerationToString(EOpenAIImageModeration ImageModeration)
+{
+    switch (ImageModeration)
+    {
+        case EOpenAIImageModeration::Auto: return "auto";
+        case EOpenAIImageModeration::Low: return "low";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIRoleToString(ERole Role)
+{
+    switch (Role)
+    {
+        case ERole::System: return "system";
+        case ERole::User: return "user";
+        case ERole::Assistant: return "assistant";
+        case ERole::Function: return "function";
+        case ERole::Tool: return "tool";
+        case ERole::Developer: return "developer";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIFinishReasonToString(EOpenAIFinishReason FinishReason)
+{
+    switch (FinishReason)
+    {
+        case EOpenAIFinishReason::Stop: return "stop";
+        case EOpenAIFinishReason::Length: return "length";
+        case EOpenAIFinishReason::Content_Filter: return "content_filter";
+        case EOpenAIFinishReason::Tool_Calls: return "tool_calls";
+        case EOpenAIFinishReason::Null: return "";
+    }
+    checkNoEntry();
+    return {};
+}
+
+EOpenAIFinishReason UOpenAIFuncLib::StringToOpenAIFinishReason(const FString& FinishReason)
+{
+    if (FinishReason.Equals("stop")) return EOpenAIFinishReason::Stop;
+    if (FinishReason.Equals("length")) return EOpenAIFinishReason::Length;
+    if (FinishReason.Equals("content_filter")) return EOpenAIFinishReason::Content_Filter;
+    if (FinishReason.Equals("tool_calls")) return EOpenAIFinishReason::Tool_Calls;
+    if (FinishReason.IsEmpty()) return EOpenAIFinishReason::Null;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown OpenAIFinishReason: {0}", FinishReason);
+    checkNoEntry();
+    return {};
+}
+
+ERole UOpenAIFuncLib::StringToOpenAIRole(const FString& Role)
+{
+    if (Role.ToLower().Equals("system")) return ERole::System;
+    if (Role.ToLower().Equals("user")) return ERole::User;
+    if (Role.ToLower().Equals("assistant")) return ERole::Assistant;
+    if (Role.ToLower().Equals("function")) return ERole::Function;
+    if (Role.ToLower().Equals("tool")) return ERole::Tool;
+    if (Role.ToLower().Equals("developer")) return ERole::Developer;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown OpenAIRole: {0}", Role);
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIHeaderTypeToString(EOpenAIHttpHeaderType Type)
+{
+    switch (Type)
+    {
+        case EOpenAIHttpHeaderType::XRequestId: return "x-request-id";
+        case EOpenAIHttpHeaderType::OpenAIProcessingMS: return "openai-processing-ms";
+        case EOpenAIHttpHeaderType::OpenAIOrganization: return "openai-organization";
+        case EOpenAIHttpHeaderType::OpenAIVersion: return "openai-version";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::FindOpenAIHttpHeaderByType(const FOpenAIResponseMetadata& Headers, EOpenAIHttpHeaderType Type)
+{
+    const FString HeaderName = OpenAIHeaderTypeToString(Type);
+    for (const auto& Header : Headers.HttpHeaders)
+    {
+        FString Name, Value;
+        if (Header.Split(TEXT(": "), &Name, &Value))
+        {
+            if (HeaderName.Equals(Name)) return Value;
+        }
+    }
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIAudioTranscriptToString(ETranscriptFormat TranscriptFormat)
+{
+    switch (TranscriptFormat)
+    {
+        case ETranscriptFormat::JSON: return "json";
+        case ETranscriptFormat::Text: return "text";
+        case ETranscriptFormat::Str: return "str";
+        case ETranscriptFormat::Verbose_JSON: return "verbose_json";
+        case ETranscriptFormat::Vtt: return "vtt";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIEmbeddingsEncodingFormatToString(EEmbeddingsEncodingFormat EmbeddingsEncodingFormat)
+{
+    switch (EmbeddingsEncodingFormat)
+    {
+        case EEmbeddingsEncodingFormat::Float: return "float";
+        case EEmbeddingsEncodingFormat::Base64: return "base64";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIChatResponseFormatToString(EChatResponseFormat ChatResponseFormat)
+{
+    switch (ChatResponseFormat)
+    {
+        case EChatResponseFormat::Text: return "text";
+        case EChatResponseFormat::JSON_Object: return "json_object";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIModelToString(const FOpenAIModel& OpenAIModel)
+{
+    FString Out = FString::Printf(TEXT("id: %s\n"), *OpenAIModel.ID);
+    Out.Append(FString::Printf(TEXT("object: %s\n"), *OpenAIModel.Object));
+    Out.Append(FString::Printf(TEXT("created: %i\n"), OpenAIModel.Created));
+    Out.Append(FString::Printf(TEXT("owned_by: %s\n"), *OpenAIModel.Owned_By));
+    return Out;
+}
+
+FString UOpenAIFuncLib::OpenAIMessageContentTypeToString(EMessageContentType MessageContentType)
+{
+    switch (MessageContentType)
+    {
+        case EMessageContentType::Text: return "text";
+        case EMessageContentType::Image_URL: return "image_url";
+    }
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::BoolToString(bool Value)
+{
+    return Value ? TEXT("true") : TEXT("false");
+}
+
+FString UOpenAIFuncLib::RemoveWhiteSpaces(const FString& Input)
+{
+    FString Result;
+    const TSet<TCHAR> Whitespaces{'\t', '\n', '\r'};
+
+    for (const TCHAR& Char : Input)
+    {
+        if (!Whitespaces.Contains(Char))
+        {
+            Result += Char;
+        }
+    }
+    return Result;
+}
+
+FString UOpenAIFuncLib::OpenAIModerationsToString(const FModerationResults& ModerationResults)
+{
+    FString Out;
+    Out.Append(FString::Printf(TEXT("hate: %s\n"), *BoolToString(ModerationResults.Categories.Hate)));
+    Out.Append(FString::Printf(TEXT("hate/threatening: %s\n"), *BoolToString(ModerationResults.Categories.Hate_Threatening)));
+    Out.Append(FString::Printf(TEXT("harassment: %s\n"), *BoolToString(ModerationResults.Categories.Harassment)));
+    Out.Append(FString::Printf(TEXT("harassment/threatening: %s\n"), *BoolToString(ModerationResults.Categories.Harassment_Threatening)));
+    Out.Append(FString::Printf(TEXT("illicit: %s\n"), *BoolToString(ModerationResults.Categories.Illicit)));
+    Out.Append(FString::Printf(TEXT("illicit/violent: %s\n"), *BoolToString(ModerationResults.Categories.Illicit_Violent)));
+    Out.Append(FString::Printf(TEXT("self-harm: %s\n"), *BoolToString(ModerationResults.Categories.Self_Harm)));
+    Out.Append(FString::Printf(TEXT("self-harm/intent: %s\n"), *BoolToString(ModerationResults.Categories.Self_Harm_Intent)));
+    Out.Append(FString::Printf(TEXT("self-harm/instructions: %s\n"), *BoolToString(ModerationResults.Categories.Self_Harm_Instructions)));
+    Out.Append(FString::Printf(TEXT("sexual: %s\n"), *BoolToString(ModerationResults.Categories.Sexual)));
+    Out.Append(FString::Printf(TEXT("sexual/minors: %s\n"), *BoolToString(ModerationResults.Categories.Sexual_Minors)));
+    Out.Append(FString::Printf(TEXT("violence: %s\n"), *BoolToString(ModerationResults.Categories.Violence)));
+    Out.Append(FString::Printf(TEXT("violence/graphic: %s\n\n"), *BoolToString(ModerationResults.Categories.Violence_Graphic)));
+
+    Out.Append(FString::Printf(TEXT("hate: %f\n"), ModerationResults.Category_Scores.Hate));
+    Out.Append(FString::Printf(TEXT("hate/threatening: %f\n"), ModerationResults.Category_Scores.Hate_Threatening));
+    Out.Append(FString::Printf(TEXT("harassment: %f\n"), ModerationResults.Category_Scores.Harassment));
+    Out.Append(FString::Printf(TEXT("harassment/threatening: %f\n"), ModerationResults.Category_Scores.Harassment_Threatening));
+    Out.Append(FString::Printf(TEXT("illicit: %f\n"), ModerationResults.Category_Scores.Illicit));
+    Out.Append(FString::Printf(TEXT("illicit/violent: %f\n"), ModerationResults.Category_Scores.Illicit_Violent));
+    Out.Append(FString::Printf(TEXT("self-harm: %f\n"), ModerationResults.Category_Scores.Self_Harm));
+    Out.Append(FString::Printf(TEXT("self-harm/intent: %f\n"), ModerationResults.Category_Scores.Self_Harm_Intent));
+    Out.Append(FString::Printf(TEXT("self-harm/instructions: %f\n"), ModerationResults.Category_Scores.Self_Harm_Instructions));
+    Out.Append(FString::Printf(TEXT("sexual: %f\n"), ModerationResults.Category_Scores.Sexual));
+    Out.Append(FString::Printf(TEXT("sexual/minors: %f\n"), ModerationResults.Category_Scores.Sexual_Minors));
+    Out.Append(FString::Printf(TEXT("violence: %f\n"), ModerationResults.Category_Scores.Violence));
+    Out.Append(FString::Printf(TEXT("violence/graphic: %f\n\n"), ModerationResults.Category_Scores.Violence_Graphic));
+
+    Out.Append(FString::Printf(TEXT("flagged: %s"), *BoolToString(ModerationResults.Flagged)));
+
+    return Out;
+}
+
+FString UOpenAIFuncLib::OpenAIUploadFilePurposeToString(EUploadFilePurpose UploadFilePurpose)
+{
+    switch (UploadFilePurpose)
+    {
+        case EUploadFilePurpose::Assistants: return "assistants";
+        case EUploadFilePurpose::Vision: return "vision";
+        case EUploadFilePurpose::Batch: return "batch";
+        case EUploadFilePurpose::FineTune: return "fine-tune";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIBatchEndpointToString(EBatchEndpoint BatchEndpoint)
+{
+    switch (BatchEndpoint)
+    {
+        case EBatchEndpoint::ChatCompletions: return "/v1/chat/completions";
+        case EBatchEndpoint::Completions: return "/v1/completions";
+        case EBatchEndpoint::Embeddings: return "/v1/embeddings";
+        case EBatchEndpoint::Responses: return "/v1/responses";
+        case EBatchEndpoint::Moderations: return "/v1/moderations";
+        case EBatchEndpoint::ImageGenerations: return "/v1/images/generations";
+        case EBatchEndpoint::ImageEdits: return "/v1/images/edits";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIBatchCompletionWindowToString(EBatchCompletionWindow BatchCompletionWindow)
+{
+    switch (BatchCompletionWindow)
+    {
+        case EBatchCompletionWindow::Window_24h: return "24h";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIUploadStatusToString(EUploadStatus UploadStatus)
+{
+    switch (UploadStatus)
+    {
+        case EUploadStatus::Pending: return "pending";
+        case EUploadStatus::Completed: return "completed";
+        case EUploadStatus::Cancelled: return "cancelled";
+        case EUploadStatus::Expired: return "expired";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIAssistantToolTypeToString(EAssistantToolType AssistantToolType)
+{
+    switch (AssistantToolType)
+    {
+        case EAssistantToolType::CodeInterpreter: return "code_interpreter";
+        case EAssistantToolType::FileSearch: return "file_search";
+        case EAssistantToolType::Function: return "function";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIVideoModelToString(EVideoModel VideoModel)
+{
+    switch (VideoModel)
+    {
+        case EVideoModel::Sora_2: return "sora-2";
+        case EVideoModel::Sora_2_Pro: return "sora-2-pro";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+EVideoModel UOpenAIFuncLib::StringToOpenAIVideoModel(const FString& VideoModel)
+{
+    if (VideoModel.Equals("sora-2")) return EVideoModel::Sora_2;
+    if (VideoModel.Equals("sora-2-pro")) return EVideoModel::Sora_2_Pro;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown EVideoModel: {0}", VideoModel);
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIVideoStatusToString(EVideoStatus VideoStatus)
+{
+    switch (VideoStatus)
+    {
+        case EVideoStatus::Queued: return "queued";
+        case EVideoStatus::InProgress: return "in_progress";
+        case EVideoStatus::Completed: return "completed";
+        case EVideoStatus::Failed: return "failed";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+EVideoStatus UOpenAIFuncLib::StringToOpenAIVideoStatus(const FString& VideoStatus)
+{
+    if (VideoStatus.Equals("queued")) return EVideoStatus::Queued;
+    if (VideoStatus.Equals("in_progress")) return EVideoStatus::InProgress;
+    if (VideoStatus.Equals("completed")) return EVideoStatus::Completed;
+    if (VideoStatus.Equals("failed")) return EVideoStatus::Failed;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown EVideoStatus: {0}", VideoStatus);
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIVideoVariantToString(EVideoVariant VideoVariant)
+{
+    switch (VideoVariant)
+    {
+        case EVideoVariant::Video: return "video";
+        case EVideoVariant::Thumbnail: return "thumbnail";
+        case EVideoVariant::Spritesheet: return "spritesheet";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+EVideoVariant UOpenAIFuncLib::StringToOpenAIVideoVariant(const FString& VideoVariant)
+{
+    if (VideoVariant.Equals("video")) return EVideoVariant::Video;
+    if (VideoVariant.Equals("thumbnail")) return EVideoVariant::Thumbnail;
+    if (VideoVariant.Equals("spritesheet")) return EVideoVariant::Spritesheet;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown EVideoVariant: {0}", VideoVariant);
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIVideoSizeToString(EVideoSize VideoSize)
+{
+    switch (VideoSize)
+    {
+        case EVideoSize::Size_720x1280: return "720x1280";
+        case EVideoSize::Size_1280x720: return "1280x720";
+        case EVideoSize::Size_1024x1792: return "1024x1792";
+        case EVideoSize::Size_1792x1024: return "1792x1024";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+EVideoSize UOpenAIFuncLib::StringToOpenAIVideoSize(const FString& VideoSize)
+{
+    if (VideoSize.Equals("720x1280")) return EVideoSize::Size_720x1280;
+    if (VideoSize.Equals("1280x720")) return EVideoSize::Size_1280x720;
+    if (VideoSize.Equals("1024x1792")) return EVideoSize::Size_1024x1792;
+    if (VideoSize.Equals("1792x1024")) return EVideoSize::Size_1792x1024;
+
+    UE_LOGFMT(LogOpenAIFuncLib, Error, "Unknown EVideoSize: {0}", VideoSize);
+    checkNoEntry();
+    return {};
+}
+
+FString UOpenAIFuncLib::OpenAIServiceTierToString(EServiceTier ServiceTier)
+{
+    switch (ServiceTier)
+    {
+        case EServiceTier::Auto: return "auto";
+        case EServiceTier::Default: return "default";
+    }
+
+    checkNoEntry();
+    return {};
+}
+
+EOpenAIResponseError UOpenAIFuncLib::GetErrorCode(const FString& RawError)
+{
+    if (RawError.Contains("ConnectionError")) return EOpenAIResponseError::NetworkError;
+
+    TSharedRef<TJsonReader<>> JsonReader = TJsonReaderFactory<>::Create(RawError);
+    TSharedPtr<FJsonObject> JsonObject;
+
+    if (!FJsonSerializer::Deserialize(JsonReader, JsonObject))
+    {
+        return EOpenAIResponseError::Unknown;
+    }
+
+    if (JsonObject.IsValid() && JsonObject->HasField(TEXT("error")))
+    {
+        const auto Error = JsonObject->GetObjectField(TEXT("error"));
+        if (Error->HasField(TEXT("code")))
+        {
+            const auto Code = Error->GetStringField(TEXT("code"));
+            if (Code.Contains("invalid_api_key"))
+            {
+                return EOpenAIResponseError::InvalidAPIKey;
+            }
+            else if (Code.Contains("model_not_found"))
+            {
+                return EOpenAIResponseError::ModelNotFound;
+            }
+            else if (Code.Contains("insufficient_quota"))
+            {
+                return EOpenAIResponseError::InsufficientQuota;
+            }
+            else if (Code.Contains("invalid_language_format"))
+            {
+                return EOpenAIResponseError::InvalidLanguageFormat;
+            }
+        }
+    }
+
+    return EOpenAIResponseError::Unknown;
+}
+
+FString UOpenAIFuncLib::GetErrorMessage(const FString& RawError)
+{
+    TSharedRef<TJsonReader<>> JsonReader = TJsonReaderFactory<>::Create(RawError);
+    TSharedPtr<FJsonObject> JsonObject;
+
+    if (!FJsonSerializer::Deserialize(JsonReader, JsonObject)) return {};
+
+    if (JsonObject.IsValid() && JsonObject->HasField(TEXT("error")))
+    {
+        const auto Error = JsonObject->GetObjectField(TEXT("error"));
+        if (Error->HasField(TEXT("message")))
+        {
+            return Error->GetStringField(TEXT("message"));
+        }
+    }
+
+    return {};
+}
+
+FString UOpenAIFuncLib::ResponseErrorToString(EOpenAIResponseError Code)
+{
+    switch (Code)
+    {
+        case EOpenAIResponseError::InvalidAPIKey: return "Invalid API key";
+        case EOpenAIResponseError::NetworkError: return "Network error";
+        case EOpenAIResponseError::ModelNotFound: return "Model not found";
+        case EOpenAIResponseError::InsufficientQuota: return "Insufficient quota";
+        case EOpenAIResponseError::InvalidLanguageFormat: return "Invalid language format";
+        case EOpenAIResponseError::Unknown: return "Unknown error";
+    }
+
+    return "Unknown error code";
+}
+
+// misc
+
+FString UOpenAIFuncLib::MakeURLWithQuery(const FString& URL, const OpenAI::QueryPairs& Args)
+{
+    FString URLWithQuery = URL + "?";
+    for (const auto& [Name, Param] : Args)
+    {
+        URLWithQuery.Append(Name).Append("=").Append(Param).Append("&");
+    }
+    URLWithQuery = URLWithQuery.LeftChop(1);
+    return URLWithQuery;
+}
+
+FString UOpenAIFuncLib::WrapBase64(const FString& Base64String)
+{
+    return FString::Format(TEXT("data:image/png;base64,{0}"), {Base64String});
+}
+
+FString UOpenAIFuncLib::UnWrapBase64(const FString& Base64String)
+{
+    const FString ToRemove = TEXT("data:image/png;base64,");
+    return Base64String.Replace(*ToRemove, TEXT(""));
+}
+
+FString UOpenAIFuncLib::FilePathToBase64(const FString& FilePath)
+{
+    TArray<uint8> ImageData;
+    if (!FFileHelper::LoadFileToArray(ImageData, *FilePath))
+    {
+        return {};
+    }
+    const FString ImageInBase64 = FBase64::Encode(ImageData);
+    return UOpenAIFuncLib::WrapBase64(ImageInBase64);
+}
+
+FOpenAIAuth UOpenAIFuncLib::LoadAPITokensFromFile(const FString& FilePath)
+{
+    TArray<FString> FileLines;
+    if (!FFileHelper::LoadFileToStringArray(FileLines, *FilePath))
+    {
+        UE_LOGFMT(LogOpenAIFuncLib, Error, "Failed loading file: {0}", FilePath);
+        return {};
+    }
+    else if (FileLines.Num() < 2)
+    {
+        UE_LOGFMT(LogOpenAIFuncLib, Error, "Auth file might have 2 or 3 lines only");
+        return {};
+    }
+    FOpenAIAuth Auth;
+
+    FString ParamName, ParamValue;
+    FileLines[0].Split("=", &ParamName, &ParamValue);
+    Auth.APIKey = ParamValue;
+
+    FileLines[1].Split("=", &ParamName, &ParamValue);
+    Auth.OrganizationID = ParamValue;
+
+    if (FileLines.Num() > 2)
+    {
+        FileLines[2].Split("=", &ParamName, &ParamValue);
+        Auth.ProjectID = ParamValue;
+    }
+
+    return Auth;
+}
+
+FOpenAIAuth UOpenAIFuncLib::LoadAPITokensFromFileOnce(const FString& FilePath)
+{
+    static FOpenAIAuth Auth;
+    if (Auth.IsEmpty())
+    {
+        Auth = LoadAPITokensFromFile(FilePath);
+    }
+    return Auth;
+}
+
+OpenAI::ServiceSecrets UOpenAIFuncLib::LoadServiceSecretsFromFile(const FString& FilePath)
+{
+    TArray<FString> FileLines;
+    if (!FFileHelper::LoadFileToStringArray(FileLines, *FilePath))
+    {
+        UE_LOGFMT(LogOpenAIFuncLib, Error, "Failed loading file: {0}", FilePath);
+        return {};
+    }
+
+    OpenAI::ServiceSecrets Secrets;
+    for (const auto& Line : FileLines)
+    {
+        FString SecretName, SecretValue;
+        Line.Split("=", &SecretName, &SecretValue);
+        Secrets.Add(MakeTuple(SecretName, SecretValue));
+    }
+
+    return Secrets;
+}
+
+bool UOpenAIFuncLib::LoadSecretByName(const OpenAI::ServiceSecrets& Secrets, const FString& SecretName, FString& SecretValue)
+{
+    const auto* Found =
+        Secrets.FindByPredicate([&](const TTuple<FString, FString>& SecretData) { return SecretData.Key.Equals(SecretName); });
+
+    if (Found)
+    {
+        SecretValue = *Found->Value;
+        return true;
+    }
+
+    SecretValue = {};
+    return false;
+}
