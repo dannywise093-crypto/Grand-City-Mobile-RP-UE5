@@ -1,5 +1,6 @@
 // Grand City Mobile - server-safe AI orchestration layer.
 #include "AI/GrandCityAIManager.h"
+#include "AI/GrandCityAIGatewayClient.h"
 
 void UGrandCityAIManager::RequestNPCDialogue(const FString& NPCId, const FString& PlayerMessage, const FString& Context, const FString& RequestId)
 {
@@ -41,15 +42,40 @@ void UGrandCityAIManager::SubmitRequest(const FString& RequestId, const FString&
         return;
     }
 
-    // Transport is intentionally isolated here. The production implementation
-    // should call the Grand City AI gateway, not OpenAI directly from the mobile client.
-    // The gateway owns provider credentials, rate limits, moderation and validation.
+    if (ActiveRequests.Contains(RequestId))
+    {
+        OnAIError.Broadcast(RequestId, TEXT("An AI request with this ID is already active."));
+        return;
+    }
+
+    UGrandCityAIGatewayClient* Gateway = GetGameInstance()->GetSubsystem<UGrandCityAIGatewayClient>();
+    if (!Gateway)
+    {
+        OnAIError.Broadcast(RequestId, TEXT("AI gateway client is unavailable."));
+        return;
+    }
+
     ActiveRequests.Add(RequestId);
-    OnAIError.Broadcast(RequestId, TEXT("AI gateway transport is not configured yet."));
-    ActiveRequests.Remove(RequestId);
+
+    Gateway->SendChatRequest(
+        RequestId,
+        SystemPrompt,
+        UserPrompt,
+        FGrandCityAIGatewaySuccess::CreateWeakLambda(this,
+            [this](const FString& CompletedRequestId, const FString& ResponseText)
+            {
+                ActiveRequests.Remove(CompletedRequestId);
+                OnAIResponse.Broadcast(CompletedRequestId, ResponseText);
+            }),
+        FGrandCityAIGatewayFailure::CreateWeakLambda(this,
+            [this](const FString& FailedRequestId, const FString& ErrorText)
+            {
+                ActiveRequests.Remove(FailedRequestId);
+                OnAIError.Broadcast(FailedRequestId, ErrorText);
+            }));
 }
 
-bool UGrandCityAIManager::ValidateRequest(const FString& RequestId, const FString& UserPrompt) const
+bool UGrandCityAIManager::ValidateRequest(const FString& RequestId, const FString& UserPrompt)
 {
     if (RequestId.IsEmpty())
     {
