@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GrandCityChurchTypes.h"
 #include "GrandCityProceduralCity.generated.h"
 
 class UInstancedStaticMeshComponent;
@@ -71,6 +72,9 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="City|Churches")
     TObjectPtr<UStaticMesh> ChurchMesh;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="City|Churches")
+    TArray<FGrandCityChurchDefinition> ChurchArchetypes;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="City|Generation")
     int32 Seed = 20260914;
 
@@ -80,4 +84,5 @@ protected:
     void GenerateCity();
     EGrandCityDistrict GetDistrictForBlock(int32 X, int32 Y) const;
     bool ShouldSpawnChurch(EGrandCityDistrict District, int32 BlockX, int32 BlockY, FRandomStream& Random) const;
+    FGrandCityChurchDefinition SelectChurchArchetype(EGrandCityDistrict District, int32 BlockX, int32 BlockY, FRandomStream& Random) const;
 };
