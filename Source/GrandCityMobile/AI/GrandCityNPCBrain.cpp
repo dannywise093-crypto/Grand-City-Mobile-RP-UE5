@@ -99,7 +99,7 @@ void UGrandCityNPCBrain::SpeakToPlayer(const FString& PlayerId, const FString& P
         State.Turns.RemoveAt(0);
     }
 
-    UGrandCityAIManager* AIManager = GetGameInstance()->GetSubsystem<UGrandCityAIManager>();
+    UGrandCityAIManager* AIManager = GetGameInstance() ? GetGameInstance()->GetSubsystem<UGrandCityAIManager>() : nullptr;
     if (!AIManager)
     {
         OnDialogueError.Broadcast(RequestId, TEXT("AI manager is unavailable."));
