@@ -25,6 +25,40 @@ Build an original, premium open-world city that feels more detailed and believab
 11. Southside — affordable housing, local businesses, community facilities and dense streets.
 12. Desert Edge — dry landscape, modern compounds, solar installations, resorts and scenic highways.
 
+## Community and worship locations
+Grand City should include welcoming, peaceful places of worship as part of the city's social and architectural fabric. Include original church designs rather than reproducing a specific real-world church.
+
+### Church catalogue
+- Large contemporary city church with a distinctive but original tower or cross silhouette.
+- Traditional stone-and-brick church with a smaller bell tower.
+- Modern neighborhood church with a community hall.
+- Hillside church overlooking the city.
+- Waterfront chapel for a quieter scenic setting.
+- Small suburban family church.
+- Multi-purpose church/community centre with classrooms and meeting spaces.
+
+### Church interiors
+- Main sanctuary/worship hall
+- Entrance foyer
+- Seating areas
+- Altar/stage area appropriate to the fictional church design
+- Choir/music area
+- Children's and youth rooms
+- Pastor/administration office
+- Counseling/meeting room
+- Kitchen and community dining area
+- Restrooms
+- Storage and utility spaces
+- Accessible entrances and circulation
+
+### Church environment and gameplay
+- Parking area with accessible spaces and pedestrian paths.
+- Landscaping, trees, gardens and benches.
+- Community events and non-combat social activities.
+- NPC schedules that reflect opening hours and events without forcing real-world religious participation.
+- Optional donation/community-service gameplay hooks handled through the server economy system.
+- Churches can act as recognizable navigation landmarks and peaceful social hubs.
+
 ## Residential catalogue
 ### Luxury villas
 - Contemporary glass-and-stone villa
@@ -124,4 +158,4 @@ Do not copy Grand Mobile's map, proprietary assets, textures, models, code, bran
 - Avoid placing unique high-resolution assets everywhere; reserve the highest detail for hero locations and close-range interiors.
 
 ## Reference direction
-The target visual language combines contemporary luxury architecture, premium urban boulevards, realistic residential interiors, lush parks/forests, and cinematic night lighting. Reference imagery is used only to establish design language; final Grand City assets must be original.
+The target visual language combines contemporary luxury architecture, premium urban boulevards, realistic residential interiors, lush parks/forests, cinematic night lighting, and peaceful community landmarks. Reference imagery is used only to establish design language; final Grand City assets must be original.
