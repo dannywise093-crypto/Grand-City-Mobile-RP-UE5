@@ -87,7 +87,11 @@ void UGrandCityNPCBrain::SpeakToPlayer(const FString& PlayerId, const FString& P
 
     const FString RequestId = MakeRequestId(SafePlayerId);
     State.LastRequestSeconds = Now;
-    State.Turns.Add({EGrandCityAIConversationRole::Player, SafeMessage});
+
+    FGrandCityAIConversationTurn PlayerTurn;
+    PlayerTurn.Role = EGrandCityAIConversationRole::Player;
+    PlayerTurn.Text = SafeMessage;
+    State.Turns.Add(PlayerTurn);
 
     const int32 MaxTurns = FMath::Max(1, MaxConversationTurns);
     while (State.Turns.Num() > MaxTurns)
@@ -140,7 +144,10 @@ void UGrandCityNPCBrain::HandleAIResponse(const FString& RequestId, const FStrin
     }
 
     FConversationState& State = Conversations.FindOrAdd(PlayerId);
-    State.Turns.Add({EGrandCityAIConversationRole::NPC, SafeResponse});
+    FGrandCityAIConversationTurn NPCTurn;
+    NPCTurn.Role = EGrandCityAIConversationRole::NPC;
+    NPCTurn.Text = SafeResponse;
+    State.Turns.Add(NPCTurn);
     while (State.Turns.Num() > FMath::Max(1, MaxConversationTurns))
     {
         State.Turns.RemoveAt(0);
