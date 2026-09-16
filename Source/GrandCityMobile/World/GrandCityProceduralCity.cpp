@@ -9,15 +9,20 @@
 AGrandCityProceduralCity::AGrandCityProceduralCity()
 {
     PrimaryActorTick.bCanEverTick = false;
+    bReplicates = true;
+    bAlwaysRelevant = true;
+    SetReplicateMovement(false);
 
     CityRoot = CreateDefaultSubobject<USceneComponent>(TEXT("CityRoot"));
+    CityRoot->SetMobility(EComponentMobility::Static);
     SetRootComponent(CityRoot);
 
     Ground = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Ground"));
     Ground->SetupAttachment(CityRoot);
     Ground->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     Ground->SetCollisionResponseToAllChannels(ECR_Block);
-    Ground->SetMobility(EComponentMobility::Static);
+    // GenerateCity changes the ground transform at runtime, so it cannot be static.
+    Ground->SetMobility(EComponentMobility::Movable);
 
     Roads = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("Roads"));
     Roads->SetupAttachment(CityRoot);
@@ -26,7 +31,7 @@ AGrandCityProceduralCity::AGrandCityProceduralCity()
 
     Buildings = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("Buildings"));
     Buildings->SetupAttachment(CityRoot);
-    Buildings->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    Buildings->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     Buildings->SetMobility(EComponentMobility::Static);
 
     static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));

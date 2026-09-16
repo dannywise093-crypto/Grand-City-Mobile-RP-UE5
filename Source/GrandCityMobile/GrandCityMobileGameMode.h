@@ -7,7 +7,7 @@
 class AController;
 class APlayerController;
 
-UCLASS()
+UCLASS(Config=Game)
 class GRANDCITYMOBILE_API AGrandCityMobileGameMode : public AGameModeBase
 {
     GENERATED_BODY()
@@ -23,10 +23,14 @@ protected:
     virtual FString InitNewPlayer(APlayerController* NewPlayer, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal = TEXT("")) override;
 
 private:
+    bool ShouldUseOfflinePIEProfile() const;
     void UpdateOnlinePlayerCount();
     void SaveAllPlayerProfiles();
     void HandleProfileLoaded(APlayerController* Player, bool bSuccess);
 
     FTimerHandle ProfileCheckpointTimer;
     TSet<AController*> ProfileReadyPlayers;
+
+    UPROPERTY(Config, EditDefaultsOnly, Category="Grand City|Development")
+    bool bAllowOfflineStandalonePIE = true;
 };

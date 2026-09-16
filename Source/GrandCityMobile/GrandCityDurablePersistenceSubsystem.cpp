@@ -35,9 +35,40 @@ namespace
 
 FString UGrandCityDurablePersistenceSubsystem::GetBaseUrl() const
 {
+    static const FString DefaultBaseUrl(TEXT("http://127.0.0.1:8080"));
+
     FString Value;
     GConfig->GetString(TEXT("/Script/GrandCityMobile.GrandCityPersistenceSettings"), TEXT("BaseUrl"), Value, GGameIni);
-    return Value.IsEmpty() ? TEXT("http://127.0.0.1:8080") : Value;
+    Value.TrimStartAndEndInline();
+
+    if (Value.Len() >= 2 && Value.StartsWith(TEXT("\"")) && Value.EndsWith(TEXT("\"")))
+    {
+        Value = Value.Mid(1, Value.Len() - 2);
+        Value.TrimStartAndEndInline();
+    }
+
+    while (Value.EndsWith(TEXT("/")))
+    {
+        Value.LeftChopInline(1);
+    }
+
+    if (Value.IsEmpty())
+    {
+        return DefaultBaseUrl;
+    }
+
+    const bool bHasHttpScheme = Value.StartsWith(TEXT("http://"), ESearchCase::IgnoreCase)
+        || Value.StartsWith(TEXT("https://"), ESearchCase::IgnoreCase);
+    if (!bHasHttpScheme)
+    {
+        UE_LOG(LogTemp, Error,
+            TEXT("Grand City persistence BaseUrl '%s' is invalid; using %s."),
+            *Value,
+            *DefaultBaseUrl);
+        return DefaultBaseUrl;
+    }
+
+    return Value;
 }
 
 FString UGrandCityDurablePersistenceSubsystem::GetApiKey() const

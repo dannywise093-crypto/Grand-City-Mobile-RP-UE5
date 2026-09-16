@@ -20,7 +20,7 @@ services:
     environment:
       PORT: 8080
       DATABASE_URL: postgresql://grandcity:change-me-in-production@postgres:5432/grandcity
-      GRANDCITY_INTERNAL_API_KEY: replace-with-a-long-random-secret
+      GRANDCITY_INTERNAL_API_KEY: replace-with-server-secret
     ports:
       - "8080:8080"
     depends_on:

@@ -1,7 +1,9 @@
 #include "GrandCityWorldSubsystem.h"
 
 #include "Engine/World.h"
+#include "GrandCityMobileGameMode.h"
 #include "GrandCityProceduralCity.h"
+#include "GameFramework/GameModeBase.h"
 
 void UGrandCityWorldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
@@ -14,7 +16,12 @@ void UGrandCityWorldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
         return;
     }
 
-    if (InWorld.GetNetMode() == NM_DedicatedServer)
+    // Template/variant maps bring their own game modes and level geometry.  The
+    // Grand City prototype belongs only to worlds running the Grand City mode.
+    // Spawn it on authority; the actor replicates and generates the same seeded
+    // city for connected clients.
+    if (InWorld.GetNetMode() == NM_Client
+        || !InWorld.GetAuthGameMode<AGrandCityMobileGameMode>())
     {
         return;
     }
@@ -22,8 +29,11 @@ void UGrandCityWorldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
     FActorSpawnParameters SpawnParams;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-    if (InWorld.SpawnActor<AGrandCityProceduralCity>(AGrandCityProceduralCity::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams))
+    if (AGrandCityProceduralCity* City = InWorld.SpawnActor<AGrandCityProceduralCity>(
+        AGrandCityProceduralCity::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams))
     {
         bCityPrototypeSpawned = true;
+        UE_LOG(LogTemp, Display, TEXT("Spawned Grand City procedural city %s in %s."),
+            *City->GetName(), *InWorld.GetMapName());
     }
 }

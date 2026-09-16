@@ -21,7 +21,7 @@ void AGrandCityMobileGameMode::BeginPlay()
 {
     Super::BeginPlay();
 
-    if (HasAuthority() && GetWorld())
+    if (HasAuthority() && GetWorld() && !ShouldUseOfflinePIEProfile())
     {
         GetWorldTimerManager().SetTimer(
             ProfileCheckpointTimer,
@@ -79,16 +79,27 @@ void AGrandCityMobileGameMode::PostLogin(APlayerController* NewPlayer)
         return;
     }
 
+    if (ShouldUseOfflinePIEProfile())
+    {
+        UE_LOG(LogTemp, Display, TEXT("Using an offline profile for PIE player %s."), *PlayerState->AccountId);
+        ProfileReadyPlayers.Add(NewPlayer);
+        RestartPlayer(NewPlayer);
+        UpdateOnlinePlayerCount();
+        return;
+    }
+
     if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(NewPlayer))
     {
+        TWeakObjectPtr<AGrandCityMobileGameMode> WeakGameMode(this);
         TWeakObjectPtr<APlayerController> WeakPlayer(NewPlayer);
         CityController->LoadPersistentProfile(
-            [this, WeakPlayer](bool bSuccess)
+            [WeakGameMode, WeakPlayer](bool bSuccess)
             {
+                AGrandCityMobileGameMode* GameMode = WeakGameMode.Get();
                 APlayerController* Player = WeakPlayer.Get();
-                if (Player)
+                if (GameMode && Player && Player->GetWorld() == GameMode->GetWorld())
                 {
-                    HandleProfileLoaded(Player, bSuccess);
+                    GameMode->HandleProfileLoaded(Player, bSuccess);
                 }
             });
     }
@@ -98,15 +109,30 @@ void AGrandCityMobileGameMode::PostLogin(APlayerController* NewPlayer)
 
 void AGrandCityMobileGameMode::Logout(AController* Exiting)
 {
-    ProfileReadyPlayers.Remove(Exiting);
+    const bool bWasProfileReady = ProfileReadyPlayers.Remove(Exiting) > 0;
 
-    if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(Exiting))
+    if (bWasProfileReady && !ShouldUseOfflinePIEProfile())
     {
-        CityController->SavePersistentProfile([](bool) {});
+        if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(Exiting))
+        {
+            CityController->SavePersistentProfile([](bool) {});
+        }
     }
 
     Super::Logout(Exiting);
     UpdateOnlinePlayerCount();
+}
+
+bool AGrandCityMobileGameMode::ShouldUseOfflinePIEProfile() const
+{
+#if WITH_EDITOR
+    const UWorld* World = GetWorld();
+    return bAllowOfflineStandalonePIE
+        && World
+        && World->WorldType == EWorldType::PIE;
+#else
+    return false;
+#endif
 }
 
 void AGrandCityMobileGameMode::RestartPlayer(AController* NewPlayer)
@@ -122,6 +148,17 @@ void AGrandCityMobileGameMode::RestartPlayer(AController* NewPlayer)
     }
 
     Super::RestartPlayer(NewPlayer);
+
+    if (const APawn* SpawnedPawn = NewPlayer->GetPawn())
+    {
+        UE_LOG(LogTemp, Display, TEXT("Grand City player spawned with pawn %s (%s)."),
+            *SpawnedPawn->GetName(), *SpawnedPawn->GetClass()->GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Grand City failed to spawn a pawn for controller %s."),
+            *NewPlayer->GetName());
+    }
 }
 
 void AGrandCityMobileGameMode::HandleProfileLoaded(APlayerController* Player, bool bSuccess)
@@ -133,8 +170,17 @@ void AGrandCityMobileGameMode::HandleProfileLoaded(APlayerController* Player, bo
 
     if (!bSuccess)
     {
-        Player->ClientReturnToMainMenuWithTextReason(FText::FromString(TEXT("Unable to load your saved character data. Please try again.")));
-        Player->Destroy();
+        ProfileReadyPlayers.Remove(Player);
+
+        if (AGrandCityMobilePlayerState* PlayerState = Player->GetPlayerState<AGrandCityMobilePlayerState>())
+        {
+            PlayerState->bAuthenticated = false;
+        }
+
+        UE_LOG(LogTemp, Error,
+            TEXT("Unable to load the persistent profile for %s. The player will remain connected without a pawn."),
+            *Player->GetName());
+        Player->ClientMessage(TEXT("Unable to load your saved character data. Please check the persistence service and try again."));
         return;
     }
 
@@ -165,16 +211,20 @@ void AGrandCityMobileGameMode::UpdateOnlinePlayerCount()
 
 void AGrandCityMobileGameMode::SaveAllPlayerProfiles()
 {
-    if (!HasAuthority() || !GetWorld())
+    if (!HasAuthority() || !GetWorld() || ShouldUseOfflinePIEProfile())
     {
         return;
     }
 
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
-        if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(It->Get()))
+        APlayerController* PlayerController = It->Get();
+        if (ProfileReadyPlayers.Contains(PlayerController))
         {
-            CityController->SavePersistentProfile([](bool) {});
+            if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(PlayerController))
+            {
+                CityController->SavePersistentProfile([](bool) {});
+            }
         }
     }
 }

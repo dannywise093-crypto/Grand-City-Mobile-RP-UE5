@@ -1,9 +1,13 @@
 #include "GrandCityMobileCharacter.h"
 #include "Camera/CameraComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/InputComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Net/UnrealNetwork.h"
+#include "UObject/ConstructorHelpers.h"
 
 AGrandCityMobileCharacter::AGrandCityMobileCharacter()
 {
@@ -11,6 +15,22 @@ AGrandCityMobileCharacter::AGrandCityMobileCharacter()
 
     bReplicates = true;
     SetReplicateMovement(true);
+
+    static ConstructorHelpers::FObjectFinder<USkeletalMesh> CharacterMesh(
+        TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"));
+    if (CharacterMesh.Succeeded())
+    {
+        GetMesh()->SetSkeletalMeshAsset(CharacterMesh.Object);
+        GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -90.0f));
+        GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
+    }
+
+    static ConstructorHelpers::FClassFinder<UAnimInstance> CharacterAnimation(
+        TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));
+    if (CharacterAnimation.Succeeded())
+    {
+        GetMesh()->SetAnimInstanceClass(CharacterAnimation.Class);
+    }
 
     CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
     CameraBoom->SetupAttachment(RootComponent);
