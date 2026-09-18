@@ -23,7 +23,7 @@ protected:
     virtual FString InitNewPlayer(APlayerController* NewPlayer, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal = TEXT("")) override;
 
 private:
-    bool ShouldUseOfflinePIEProfile() const;
+    bool ShouldUseOfflineEditorPlayProfile() const;
     void UpdateOnlinePlayerCount();
     void SaveAllPlayerProfiles();
     void HandleProfileLoaded(APlayerController* Player, bool bSuccess);

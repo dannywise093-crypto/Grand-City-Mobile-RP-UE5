@@ -14,6 +14,7 @@ public class GrandCityMobile : ModuleRules
             "EnhancedInput",
             "UMG",
             "Slate",
+            "SlateCore",
             "AIModule",
             "StateTreeModule",
             "GameplayStateTreeModule",

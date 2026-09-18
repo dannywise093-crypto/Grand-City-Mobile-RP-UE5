@@ -21,7 +21,7 @@ void AGrandCityMobileGameMode::BeginPlay()
 {
     Super::BeginPlay();
 
-    if (HasAuthority() && GetWorld() && !ShouldUseOfflinePIEProfile())
+    if (HasAuthority() && GetWorld() && !ShouldUseOfflineEditorPlayProfile())
     {
         GetWorldTimerManager().SetTimer(
             ProfileCheckpointTimer,
@@ -79,9 +79,9 @@ void AGrandCityMobileGameMode::PostLogin(APlayerController* NewPlayer)
         return;
     }
 
-    if (ShouldUseOfflinePIEProfile())
+    if (ShouldUseOfflineEditorPlayProfile())
     {
-        UE_LOG(LogTemp, Display, TEXT("Using an offline profile for PIE player %s."), *PlayerState->AccountId);
+        UE_LOG(LogTemp, Display, TEXT("Using an offline standalone development profile for player %s."), *PlayerState->AccountId);
         ProfileReadyPlayers.Add(NewPlayer);
         RestartPlayer(NewPlayer);
         UpdateOnlinePlayerCount();
@@ -111,7 +111,7 @@ void AGrandCityMobileGameMode::Logout(AController* Exiting)
 {
     const bool bWasProfileReady = ProfileReadyPlayers.Remove(Exiting) > 0;
 
-    if (bWasProfileReady && !ShouldUseOfflinePIEProfile())
+    if (bWasProfileReady && !ShouldUseOfflineEditorPlayProfile())
     {
         if (AGrandCityMobilePlayerController* CityController = Cast<AGrandCityMobilePlayerController>(Exiting))
         {
@@ -123,13 +123,18 @@ void AGrandCityMobileGameMode::Logout(AController* Exiting)
     UpdateOnlinePlayerCount();
 }
 
-bool AGrandCityMobileGameMode::ShouldUseOfflinePIEProfile() const
+bool AGrandCityMobileGameMode::ShouldUseOfflineEditorPlayProfile() const
 {
 #if WITH_EDITOR
     const UWorld* World = GetWorld();
     return bAllowOfflineStandalonePIE
         && World
-        && World->WorldType == EWorldType::PIE;
+        && (World->IsPlayInEditor() || World->IsPlayInPreview());
+#elif PLATFORM_ANDROID && UE_BUILD_DEVELOPMENT
+    const UWorld* World = GetWorld();
+    return bAllowOfflineStandalonePIE
+        && World
+        && World->GetNetMode() == NM_Standalone;
 #else
     return false;
 #endif
@@ -211,7 +216,7 @@ void AGrandCityMobileGameMode::UpdateOnlinePlayerCount()
 
 void AGrandCityMobileGameMode::SaveAllPlayerProfiles()
 {
-    if (!HasAuthority() || !GetWorld() || ShouldUseOfflinePIEProfile())
+    if (!HasAuthority() || !GetWorld() || ShouldUseOfflineEditorPlayProfile())
     {
         return;
     }
