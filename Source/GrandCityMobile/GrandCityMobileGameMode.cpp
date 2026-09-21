@@ -6,6 +6,8 @@
 
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Online/CoreOnline.h"
 #include "TimerManager.h"
 
@@ -125,6 +127,12 @@ void AGrandCityMobileGameMode::Logout(AController* Exiting)
 
 bool AGrandCityMobileGameMode::ShouldUseOfflineEditorPlayProfile() const
 {
+#if !UE_BUILD_SHIPPING
+    if (FParse::Param(FCommandLine::Get(), TEXT("GrandCityCrouchPlaytest")))
+    {
+        return true;
+    }
+#endif
 #if WITH_EDITOR
     const UWorld* World = GetWorld();
     return bAllowOfflineStandalonePIE

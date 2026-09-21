@@ -8,6 +8,7 @@
 class UCameraComponent;
 class USpringArmComponent;
 class UAnimInstance;
+class UAnimMontage;
 class UAnimSequence;
 
 enum class EGrandCityCrouchAnimationPhase : uint8
@@ -60,6 +61,12 @@ protected:
     void UpdateCrouchLocomotion();
     void PlayCrouchAnimation(UAnimSequence* Animation, bool bLooping, float PlayRate = 1.0f);
     UAnimSequence* SelectCrouchLocomotionAnimation() const;
+    bool IsMovingForCrouchTransition() const;
+    void PauseMovementForCrouchTransition(float DurationSeconds);
+    void ResumeMovementAfterCrouchTransition();
+#if !UE_BUILD_SHIPPING
+    void TickCrouchMovementPlaytest();
+#endif
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Camera")
     TObjectPtr<USpringArmComponent> CameraBoom;
@@ -106,6 +113,25 @@ protected:
     UPROPERTY(Transient)
     TObjectPtr<UAnimSequence> ActiveCrouchAnimation;
 
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimMontage> ActiveCrouchMontage;
+
     FTimerHandle CrouchAnimationTimer;
+    FTimerHandle CrouchMovementPauseTimer;
     EGrandCityCrouchAnimationPhase CrouchAnimationPhase = EGrandCityCrouchAnimationPhase::Standing;
+    bool bCrouchMovementPaused = false;
+    float ForwardInputValue = 0.0f;
+    float RightInputValue = 0.0f;
+
+#if !UE_BUILD_SHIPPING
+    bool bCrouchMovementPlaytestEnabled = false;
+    bool bCrouchMovementPlaytestFailed = false;
+    int32 CrouchMovementPlaytestStage = 0;
+    int32 CrouchMovementPlaytestPauseCount = 0;
+    int32 CrouchMovementPlaytestCompletedPauses = 0;
+    float CrouchMovementPlaytestStageStartTime = -1.0f;
+    FVector CrouchMovementPlaytestStageStartLocation = FVector::ZeroVector;
+    FVector CrouchMovementPlaytestPauseStartLocation = FVector::ZeroVector;
+    float CrouchMovementPlaytestMaxPauseDrift = 0.0f;
+#endif
 };
