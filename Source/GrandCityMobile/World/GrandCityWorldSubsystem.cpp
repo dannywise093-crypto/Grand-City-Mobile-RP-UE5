@@ -1,6 +1,7 @@
 #include "GrandCityWorldSubsystem.h"
 
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GrandCityMobileGameMode.h"
 #include "GrandCityProceduralCity.h"
 #include "GameFramework/GameModeBase.h"
@@ -16,24 +17,24 @@ void UGrandCityWorldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
         return;
     }
 
-    // Template/variant maps bring their own game modes and level geometry.  The
-    // Grand City prototype belongs only to worlds running the Grand City mode.
-    // Spawn it on authority; the actor replicates and generates the same seeded
-    // city for connected clients.
-    if (InWorld.GetNetMode() == NM_Client
-        || !InWorld.GetAuthGameMode<AGrandCityMobileGameMode>())
+    // Template/variant maps bring their own game modes and level geometry. The
+    // city belongs only to worlds running the Grand City mode.
+    if (!InWorld.GetAuthGameMode<AGrandCityMobileGameMode>())
     {
         return;
     }
 
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-    if (AGrandCityProceduralCity* City = InWorld.SpawnActor<AGrandCityProceduralCity>(
-        AGrandCityProceduralCity::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams))
+    // The city is baked into the level. Never spawn or regenerate it here: a
+    // runtime spawn was the reason the old prototype refreshed on every Play.
+    for (TActorIterator<AGrandCityProceduralCity> It(&InWorld); It; ++It)
     {
         bCityPrototypeSpawned = true;
-        UE_LOG(LogTemp, Display, TEXT("Spawned Grand City procedural city %s in %s."),
-            *City->GetName(), *InWorld.GetMapName());
+        UE_LOG(LogTemp, Display, TEXT("Using baked Grand City actor %s in %s; runtime spawning is disabled."),
+            *It->GetName(), *InWorld.GetMapName());
+        return;
     }
+
+    UE_LOG(LogTemp, Warning,
+        TEXT("No baked Grand City actor exists in %s. Place AGrandCityProceduralCity and press Regenerate City in the editor."),
+        *InWorld.GetMapName());
 }
