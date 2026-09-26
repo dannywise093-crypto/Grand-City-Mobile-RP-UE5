@@ -11,6 +11,9 @@ class UGrandCityPlayerProfileComponent;
 class UGrandCityMobileControlsWidget;
 class SGrandCityVirtualJoystick;
 class SVirtualJoystick;
+class AGrandCityVehicle;
+class UTouchInterface;
+enum class EGrandCityVehicleControl : uint8;
 
 UCLASS(Config=Game)
 class GRANDCITYMOBILE_API AGrandCityMobilePlayerController : public APlayerController
@@ -31,8 +34,16 @@ protected:
     virtual TSharedPtr<SVirtualJoystick> CreateVirtualJoystick() override;
     virtual void OnPossess(APawn* InPawn) override;
     virtual void OnUnPossess() override;
+    virtual void PawnLeavingGame() override;
+    virtual void AutoManageActiveCameraTarget(AActor* SuggestedTarget) override;
 
 public:
+    UFUNCTION(Server, Reliable)
+    void ServerEnterVehicle(AGrandCityVehicle* Vehicle);
+
+    UFUNCTION(Server, Reliable)
+    void ServerExitVehicle();
+
     UFUNCTION(Client, Reliable)
     void ClientInitializeSession();
 
@@ -63,6 +74,15 @@ private:
     void HandleJumpFeedbackExpired();
     void HandleCrouchButtonPressed();
 
+    /** E key / ENTER / EXIT buttons: enter the nearby vehicle, or leave the current one. */
+    void HandleInteractPressed();
+    void HandleVehicleControlChanged(EGrandCityVehicleControl Control, bool bPressed);
+    void ApplyTouchVehicleInput();
+    void ResetTouchVehicleInput();
+    /** Local only. Tracks the nearest free vehicle and switches the UI between on-foot and driving. */
+    void UpdateVehicleInteraction();
+    void SetVehicleControlsActive(bool bActive);
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Grand City|Persistence", meta=(AllowPrivateAccess="true"))
     TObjectPtr<UGrandCityPlayerProfileComponent> PlayerProfileComponent;
 
@@ -82,4 +102,17 @@ private:
     FTimerHandle JumpFeedbackTimer;
     bool bCameraTouchActive = false;
     bool bJumpFeedbackActive = false;
+
+    /** The on-foot touch joystick, restored after leaving a vehicle. */
+    UPROPERTY(Transient)
+    TObjectPtr<UTouchInterface> OnFootTouchInterface;
+
+    TWeakObjectPtr<AGrandCityVehicle> NearbyVehicle;
+    FTimerHandle VehicleInteractionTimer;
+    bool bVehicleControlsActive = false;
+    bool bTouchForwardHeld = false;
+    bool bTouchReverseHeld = false;
+    bool bTouchBrakeHeld = false;
+    bool bTouchSteerLeftHeld = false;
+    bool bTouchSteerRightHeld = false;
 };

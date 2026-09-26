@@ -1,4 +1,5 @@
 #include "GrandCityMobileCharacter.h"
+#include "Vehicles/GrandCityVehicle.h"
 #include "Camera/CameraComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
@@ -173,6 +174,71 @@ void AGrandCityMobileCharacter::GetLifetimeReplicatedProps(TArray<FLifetimePrope
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(AGrandCityMobileCharacter, bIsSprinting);
+    DOREPLIFETIME(AGrandCityMobileCharacter, OccupiedVehicle);
+}
+
+void AGrandCityMobileCharacter::EnterVehicle(AGrandCityVehicle* Vehicle)
+{
+    if (!HasAuthority() || !Vehicle || OccupiedVehicle)
+    {
+        return;
+    }
+
+    if (bIsCrouched || WantsToCrouch())
+    {
+        UnCrouch();
+    }
+    bIsSprinting = false;
+    ForwardInputValue = 0.0f;
+    RightInputValue = 0.0f;
+
+    OccupiedVehicle = Vehicle;
+    // Ride along hidden inside the vehicle so the character's replicated
+    // location stays with the car (relevancy, profile saves, exit fallback).
+    AttachToActor(Vehicle, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+    ApplyOccupiedVehicleState();
+    ForceNetUpdate();
+}
+
+void AGrandCityMobileCharacter::ExitVehicle(const FVector& ExitLocation, const FRotator& ExitRotation)
+{
+    if (!HasAuthority() || !OccupiedVehicle)
+    {
+        return;
+    }
+
+    OccupiedVehicle = nullptr;
+    DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+    SetActorLocationAndRotation(ExitLocation, ExitRotation, false, nullptr, ETeleportType::TeleportPhysics);
+    ApplyOccupiedVehicleState();
+    ForceNetUpdate();
+}
+
+void AGrandCityMobileCharacter::OnRep_OccupiedVehicle()
+{
+    ApplyOccupiedVehicleState();
+}
+
+void AGrandCityMobileCharacter::ApplyOccupiedVehicleState()
+{
+    const bool bInVehicle = OccupiedVehicle != nullptr;
+    SetActorHiddenInGame(bInVehicle);
+    SetActorEnableCollision(!bInVehicle);
+    ApplyMovementSpeed();
+
+    if (UCharacterMovementComponent* MovementComponent = GetCharacterMovement())
+    {
+        if (bInVehicle)
+        {
+            MovementComponent->StopMovementImmediately();
+            MovementComponent->DisableMovement();
+        }
+        else if (MovementComponent->MovementMode == MOVE_None)
+        {
+            // Walking re-checks the floor and falls if the exit spot is above ground.
+            MovementComponent->SetMovementMode(MOVE_Walking);
+        }
+    }
 }
 
 void AGrandCityMobileCharacter::MoveForward(float Value)

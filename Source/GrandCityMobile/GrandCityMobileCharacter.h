@@ -10,6 +10,7 @@ class USpringArmComponent;
 class UAnimInstance;
 class UAnimMontage;
 class UAnimSequence;
+class AGrandCityVehicle;
 
 enum class EGrandCityCrouchAnimationPhase : uint8
 {
@@ -35,6 +36,12 @@ public:
     bool IsSprinting() const { return bIsSprinting; }
     bool WantsToCrouch() const;
 
+    /** Server only. Hides the character and seats it in the vehicle; the controller possesses the vehicle. */
+    void EnterVehicle(AGrandCityVehicle* Vehicle);
+    /** Server only. Restores the character at the given exit spot. */
+    void ExitVehicle(const FVector& ExitLocation, const FRotator& ExitRotation);
+    AGrandCityVehicle* GetOccupiedVehicle() const { return OccupiedVehicle; }
+
 protected:
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
@@ -54,6 +61,11 @@ protected:
 
     UFUNCTION()
     void OnRep_Sprinting();
+
+    UFUNCTION()
+    void OnRep_OccupiedVehicle();
+
+    void ApplyOccupiedVehicleState();
 
     void ApplyMovementSpeed();
     void BeginCrouchLoop();
@@ -109,6 +121,9 @@ protected:
 
     UPROPERTY(ReplicatedUsing=OnRep_Sprinting, BlueprintReadOnly, Category="Movement")
     bool bIsSprinting = false;
+
+    UPROPERTY(ReplicatedUsing=OnRep_OccupiedVehicle, BlueprintReadOnly, Category="Vehicle")
+    TObjectPtr<AGrandCityVehicle> OccupiedVehicle;
 
     UPROPERTY(Transient)
     TObjectPtr<UAnimSequence> ActiveCrouchAnimation;

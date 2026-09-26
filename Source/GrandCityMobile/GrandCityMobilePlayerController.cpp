@@ -3,8 +3,11 @@
 #include "UI/GrandCityMobileControlsWidget.h"
 #include "GrandCityMobileCharacter.h"
 #include "GrandCityPlayerProfileComponent.h"
+#include "Vehicles/GrandCityVehicle.h"
 #include "Components/InputComponent.h"
+#include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/TouchInterface.h"
 #include "TimerManager.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
@@ -124,6 +127,12 @@ void AGrandCityMobilePlayerController::BeginPlay()
                 this, &AGrandCityMobilePlayerController::HandleJumpButtonPressed);
             MobileControlsWidget->OnCrouchPressed.BindUObject(
                 this, &AGrandCityMobilePlayerController::HandleCrouchButtonPressed);
+            MobileControlsWidget->OnEnterVehiclePressed.BindUObject(
+                this, &AGrandCityMobilePlayerController::HandleInteractPressed);
+            MobileControlsWidget->OnExitVehiclePressed.BindUObject(
+                this, &AGrandCityMobilePlayerController::HandleInteractPressed);
+            MobileControlsWidget->OnVehicleControlChanged.BindUObject(
+                this, &AGrandCityMobilePlayerController::HandleVehicleControlChanged);
             // The built-in virtual joystick is a full-screen Slate widget at
             // viewport Z-order 0. Keep the action buttons in the same overlay
             // above it so their hit-test path receives touch events.
@@ -137,10 +146,21 @@ void AGrandCityMobilePlayerController::BeginPlay()
             UE_LOG(LogTemp, Error, TEXT("Grand City could not create the mobile controls widget."));
         }
     }
+
+    if (IsLocalPlayerController())
+    {
+        GetWorldTimerManager().SetTimer(
+            VehicleInteractionTimer,
+            this,
+            &AGrandCityMobilePlayerController::UpdateVehicleInteraction,
+            0.1f,
+            true);
+    }
 }
 
 void AGrandCityMobilePlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    GetWorldTimerManager().ClearTimer(VehicleInteractionTimer);
     HandleJumpButtonReleased();
     ResetTouchFeedback();
 
@@ -165,12 +185,15 @@ void AGrandCityMobilePlayerController::SetupInputComponent()
     InputComponent->BindTouch(IE_Pressed, this, &AGrandCityMobilePlayerController::HandleTouchStarted);
     InputComponent->BindTouch(IE_Repeat, this, &AGrandCityMobilePlayerController::HandleTouchMoved);
     InputComponent->BindTouch(IE_Released, this, &AGrandCityMobilePlayerController::HandleTouchEnded);
+    // Bound on the controller so the same key enters (on foot) and exits (driving).
+    InputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &AGrandCityMobilePlayerController::HandleInteractPressed);
 }
 
 void AGrandCityMobilePlayerController::FlushPressedKeys()
 {
     HandleJumpButtonReleased();
     ResetTouchFeedback();
+    ResetTouchVehicleInput();
     Super::FlushPressedKeys();
 }
 
@@ -296,6 +319,13 @@ void AGrandCityMobilePlayerController::RefreshTouchFeedback()
         return;
     }
 
+    if (bVehicleControlsActive)
+    {
+        // Walk/run/camera hints describe on-foot controls only.
+        MobileControlsWidget->ClearFeedback();
+        return;
+    }
+
     if (bJumpFeedbackActive)
     {
         MobileControlsWidget->ShowFeedback(
@@ -355,6 +385,218 @@ void AGrandCityMobilePlayerController::RefreshTouchFeedback()
     }
 
     MobileControlsWidget->ClearFeedback();
+}
+
+void AGrandCityMobilePlayerController::HandleInteractPressed()
+{
+    if (Cast<AGrandCityVehicle>(GetPawn()))
+    {
+        ServerExitVehicle();
+        return;
+    }
+
+    // Refresh first so a key press right after walking up still finds the car.
+    UpdateVehicleInteraction();
+    if (AGrandCityVehicle* Vehicle = NearbyVehicle.Get())
+    {
+        ServerEnterVehicle(Vehicle);
+    }
+}
+
+void AGrandCityMobilePlayerController::UpdateVehicleInteraction()
+{
+    SetVehicleControlsActive(Cast<AGrandCityVehicle>(GetPawn()) != nullptr);
+
+    AGrandCityVehicle* BestVehicle = nullptr;
+    const AGrandCityMobileCharacter* MobileCharacter = Cast<AGrandCityMobileCharacter>(GetPawn());
+    if (MobileCharacter && !MobileCharacter->GetOccupiedVehicle() && GetWorld())
+    {
+        const FVector CharacterLocation = MobileCharacter->GetActorLocation();
+        float BestDistance = TNumericLimits<float>::Max();
+        for (TActorIterator<AGrandCityVehicle> It(GetWorld()); It; ++It)
+        {
+            AGrandCityVehicle* Vehicle = *It;
+            if (Vehicle->HasDriver())
+            {
+                continue;
+            }
+
+            const float Distance = Vehicle->GetDistanceToVehicle(CharacterLocation);
+            if (Distance <= Vehicle->EnterRange && Distance < BestDistance)
+            {
+                BestDistance = Distance;
+                BestVehicle = Vehicle;
+            }
+        }
+    }
+
+    NearbyVehicle = BestVehicle;
+    if (MobileControlsWidget)
+    {
+        MobileControlsWidget->SetEnterVehicleAvailable(BestVehicle != nullptr);
+    }
+}
+
+void AGrandCityMobilePlayerController::SetVehicleControlsActive(bool bActive)
+{
+    if (bVehicleControlsActive == bActive)
+    {
+        return;
+    }
+
+    bVehicleControlsActive = bActive;
+    ResetTouchVehicleInput();
+
+    if (!MobileControlsWidget)
+    {
+        return;
+    }
+
+    // The left joystick would sit under the steering buttons, so it is removed
+    // while driving and restored when the player is back on foot.
+    if (bActive)
+    {
+        if (CurrentTouchInterface)
+        {
+            OnFootTouchInterface = CurrentTouchInterface;
+        }
+        ActivateTouchInterface(nullptr);
+    }
+    else
+    {
+        ActivateTouchInterface(OnFootTouchInterface);
+    }
+
+    MobileControlsWidget->SetVehicleMode(bActive);
+    ResetTouchFeedback();
+    RefreshTouchFeedback();
+}
+
+void AGrandCityMobilePlayerController::HandleVehicleControlChanged(EGrandCityVehicleControl Control, bool bPressed)
+{
+    switch (Control)
+    {
+    case EGrandCityVehicleControl::Forward:
+        bTouchForwardHeld = bPressed;
+        break;
+    case EGrandCityVehicleControl::Reverse:
+        bTouchReverseHeld = bPressed;
+        break;
+    case EGrandCityVehicleControl::Brake:
+        bTouchBrakeHeld = bPressed;
+        break;
+    case EGrandCityVehicleControl::SteerLeft:
+        bTouchSteerLeftHeld = bPressed;
+        break;
+    case EGrandCityVehicleControl::SteerRight:
+        bTouchSteerRightHeld = bPressed;
+        break;
+    }
+
+    ApplyTouchVehicleInput();
+}
+
+void AGrandCityMobilePlayerController::ApplyTouchVehicleInput()
+{
+    if (AGrandCityVehicle* Vehicle = Cast<AGrandCityVehicle>(GetPawn()))
+    {
+        Vehicle->SetTouchThrottle((bTouchForwardHeld ? 1.0f : 0.0f) - (bTouchReverseHeld ? 1.0f : 0.0f));
+        Vehicle->SetTouchSteering((bTouchSteerRightHeld ? 1.0f : 0.0f) - (bTouchSteerLeftHeld ? 1.0f : 0.0f));
+        Vehicle->SetTouchBrake(bTouchBrakeHeld);
+    }
+}
+
+void AGrandCityMobilePlayerController::ResetTouchVehicleInput()
+{
+    bTouchForwardHeld = false;
+    bTouchReverseHeld = false;
+    bTouchBrakeHeld = false;
+    bTouchSteerLeftHeld = false;
+    bTouchSteerRightHeld = false;
+    ApplyTouchVehicleInput();
+}
+
+void AGrandCityMobilePlayerController::ServerEnterVehicle_Implementation(AGrandCityVehicle* Vehicle)
+{
+    AGrandCityMobileCharacter* MobileCharacter = Cast<AGrandCityMobileCharacter>(GetPawn());
+    if (!MobileCharacter || !Vehicle || Vehicle->HasDriver() || MobileCharacter->GetOccupiedVehicle())
+    {
+        return;
+    }
+
+    // Allow some slack for latency between the client's range check and the server.
+    constexpr float EnterRangeTolerance = 150.0f;
+    if (Vehicle->GetDistanceToVehicle(MobileCharacter->GetActorLocation()) > Vehicle->EnterRange + EnterRangeTolerance)
+    {
+        return;
+    }
+
+    Vehicle->SetDriver(MobileCharacter);
+    MobileCharacter->EnterVehicle(Vehicle);
+    Possess(Vehicle);
+    UE_LOG(LogGrandCityMobileControls, Log, TEXT("%s entered %s."), *GetNameSafe(this), *GetNameSafe(Vehicle));
+}
+
+void AGrandCityMobilePlayerController::ServerExitVehicle_Implementation()
+{
+    AGrandCityVehicle* Vehicle = Cast<AGrandCityVehicle>(GetPawn());
+    AGrandCityMobileCharacter* MobileCharacter = Vehicle ? Vehicle->GetDriver() : nullptr;
+    if (!MobileCharacter)
+    {
+        return;
+    }
+
+    FVector ExitLocation;
+    FRotator ExitRotation;
+    if (!Vehicle->FindExitTransform(MobileCharacter, ExitLocation, ExitRotation))
+    {
+        // Boxed in: stay in the car rather than spawning inside a wall.
+        UE_LOG(LogGrandCityMobileControls, Warning, TEXT("No free exit spot around %s."), *GetNameSafe(Vehicle));
+        return;
+    }
+
+    Vehicle->SetDriver(nullptr);
+    MobileCharacter->ExitVehicle(ExitLocation, ExitRotation);
+    Possess(MobileCharacter);
+    // Put the on-foot camera behind the character, looking the way the car faced.
+    ClientSetRotation(FRotator(-10.0f, ExitRotation.Yaw, 0.0f));
+    UE_LOG(LogGrandCityMobileControls, Log, TEXT("%s exited %s."), *GetNameSafe(this), *GetNameSafe(Vehicle));
+}
+
+void AGrandCityMobilePlayerController::PawnLeavingGame()
+{
+    // Leaving while driving: keep the vehicle in the world and remove the player's body.
+    if (AGrandCityVehicle* Vehicle = Cast<AGrandCityVehicle>(GetPawn()))
+    {
+        AGrandCityMobileCharacter* Driver = Vehicle->GetDriver();
+        Vehicle->SetDriver(nullptr);
+        UnPossess();
+        if (Driver)
+        {
+            Driver->Destroy();
+        }
+        return;
+    }
+
+    Super::PawnLeavingGame();
+}
+
+void AGrandCityMobilePlayerController::AutoManageActiveCameraTarget(AActor* SuggestedTarget)
+{
+    // Blend the camera between the character and the vehicle instead of cutting.
+    AActor* CurrentViewTarget = GetViewTarget();
+    const bool bVehicleSwap = bAutoManageActiveCameraTarget
+        && SuggestedTarget
+        && CurrentViewTarget
+        && CurrentViewTarget != SuggestedTarget
+        && (Cast<AGrandCityVehicle>(SuggestedTarget) || Cast<AGrandCityVehicle>(CurrentViewTarget));
+    if (bVehicleSwap)
+    {
+        SetViewTargetWithBlend(SuggestedTarget, 0.45f, VTBlend_EaseInOut, 2.0f);
+        return;
+    }
+
+    Super::AutoManageActiveCameraTarget(SuggestedTarget);
 }
 
 void AGrandCityMobilePlayerController::HandleRunButtonPressed()
