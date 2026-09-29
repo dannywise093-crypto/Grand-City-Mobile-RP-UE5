@@ -79,6 +79,13 @@ void UGrandCityMobileControlsWidget::NativeOnInitialized()
         NSLOCTEXT("GrandCityMobileControls", "EnterVehicleButton", "ENTER"),
         FVector2D(-208.0f, -160.0f));
 
+    // Above ENTER so a quest giver next to a parked car keeps both actions reachable.
+    QuestInteractButton = CreateActionButton(
+        RootCanvas,
+        TEXT("QuestInteractButton"),
+        NSLOCTEXT("GrandCityMobileControls", "QuestInteractButton", "QUEST"),
+        FVector2D(-208.0f, -288.0f));
+
     if (RunButton)
     {
         RunButton->OnClicked.AddDynamic(this, &UGrandCityMobileControlsWidget::HandleRunPressed);
@@ -98,6 +105,11 @@ void UGrandCityMobileControlsWidget::NativeOnInitialized()
     {
         EnterVehicleButton->SetBackgroundColor(FLinearColor(0.05f, 0.35f, 0.12f, 0.9f));
         EnterVehicleButton->OnClicked.AddDynamic(this, &UGrandCityMobileControlsWidget::HandleEnterVehiclePressed);
+    }
+    if (QuestInteractButton)
+    {
+        QuestInteractButton->SetBackgroundColor(FLinearColor(0.45f, 0.32f, 0.02f, 0.9f));
+        QuestInteractButton->OnClicked.AddDynamic(this, &UGrandCityMobileControlsWidget::HandleQuestInteractPressed);
     }
 
     // Driving layout. Pedals sit bottom-right (FORWARD above REVERSE, a tall BRAKE
@@ -191,6 +203,28 @@ void UGrandCityMobileControlsWidget::SetEnterVehicleAvailable(bool bAvailable)
     RefreshButtonVisibility();
 }
 
+void UGrandCityMobileControlsWidget::SetQuestInteractAvailable(bool bAvailable, const FText& Label)
+{
+    if (QuestInteractButton && bAvailable)
+    {
+        if (UTextBlock* ButtonLabel = Cast<UTextBlock>(QuestInteractButton->GetContent()))
+        {
+            if (!ButtonLabel->GetText().EqualTo(Label))
+            {
+                ButtonLabel->SetText(Label);
+            }
+        }
+    }
+
+    if (bQuestInteractAvailable == bAvailable)
+    {
+        return;
+    }
+
+    bQuestInteractAvailable = bAvailable;
+    RefreshButtonVisibility();
+}
+
 void UGrandCityMobileControlsWidget::RefreshButtonVisibility()
 {
     // The controller clears held pedal/steering input on every mode switch, so a
@@ -206,6 +240,12 @@ void UGrandCityMobileControlsWidget::RefreshButtonVisibility()
     if (EnterVehicleButton)
     {
         EnterVehicleButton->SetVisibility(!bVehicleMode && bEnterVehicleAvailable
+            ? ESlateVisibility::Visible
+            : ESlateVisibility::Collapsed);
+    }
+    if (QuestInteractButton)
+    {
+        QuestInteractButton->SetVisibility(!bVehicleMode && bQuestInteractAvailable
             ? ESlateVisibility::Visible
             : ESlateVisibility::Collapsed);
     }
@@ -311,6 +351,11 @@ void UGrandCityMobileControlsWidget::HandleEnterVehiclePressed()
 void UGrandCityMobileControlsWidget::HandleExitVehiclePressed()
 {
     OnExitVehiclePressed.ExecuteIfBound();
+}
+
+void UGrandCityMobileControlsWidget::HandleQuestInteractPressed()
+{
+    OnQuestInteractPressed.ExecuteIfBound();
 }
 
 void UGrandCityMobileControlsWidget::HandleForwardPressed()

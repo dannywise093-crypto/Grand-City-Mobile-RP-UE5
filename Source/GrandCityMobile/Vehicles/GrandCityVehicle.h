@@ -38,6 +38,9 @@ public:
     /** Distance from a world point to the vehicle's collision box surface (0 when inside). */
     float GetDistanceToVehicle(const FVector& WorldPoint) const;
 
+    /** Height of the roof (top of the collision box) above the actor origin, in world cm. */
+    float GetRoofHeight() const;
+
     /** Server only. Finds a free spot next to the vehicle for the driver to step out. */
     bool FindExitTransform(const AGrandCityMobileCharacter* Character, FVector& OutLocation, FRotator& OutRotation) const;
 

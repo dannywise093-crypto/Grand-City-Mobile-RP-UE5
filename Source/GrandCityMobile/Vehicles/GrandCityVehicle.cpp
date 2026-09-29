@@ -512,6 +512,11 @@ float AGrandCityVehicle::GetDistanceToVehicle(const FVector& WorldPoint) const
     return FVector::Dist(LocalPoint, Closest);
 }
 
+float AGrandCityVehicle::GetRoofHeight() const
+{
+    return CollisionBox ? CollisionBox->GetScaledBoxExtent().Z : 0.0f;
+}
+
 bool AGrandCityVehicle::FindExitTransform(
     const AGrandCityMobileCharacter* Character,
     FVector& OutLocation,

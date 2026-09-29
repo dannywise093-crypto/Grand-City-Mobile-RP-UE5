@@ -3,6 +3,7 @@
 #include "UI/GrandCityMobileControlsWidget.h"
 #include "GrandCityMobileCharacter.h"
 #include "GrandCityPlayerProfileComponent.h"
+#include "Quests/GrandCityQuestComponent.h"
 #include "Vehicles/GrandCityVehicle.h"
 #include "Components/InputComponent.h"
 #include "EngineUtils.h"
@@ -104,6 +105,7 @@ AGrandCityMobilePlayerController::AGrandCityMobilePlayerController()
 {
     bReplicates = true;
     PlayerProfileComponent = CreateDefaultSubobject<UGrandCityPlayerProfileComponent>(TEXT("PlayerProfileComponent"));
+    QuestComponent = CreateDefaultSubobject<UGrandCityQuestComponent>(TEXT("QuestComponent"));
 }
 
 void AGrandCityMobilePlayerController::BeginPlay()
@@ -128,7 +130,9 @@ void AGrandCityMobilePlayerController::BeginPlay()
             MobileControlsWidget->OnCrouchPressed.BindUObject(
                 this, &AGrandCityMobilePlayerController::HandleCrouchButtonPressed);
             MobileControlsWidget->OnEnterVehiclePressed.BindUObject(
-                this, &AGrandCityMobilePlayerController::HandleInteractPressed);
+                this, &AGrandCityMobilePlayerController::EnterNearbyVehicle);
+            MobileControlsWidget->OnQuestInteractPressed.BindUObject(
+                this, &AGrandCityMobilePlayerController::HandleQuestInteractPressed);
             MobileControlsWidget->OnExitVehiclePressed.BindUObject(
                 this, &AGrandCityMobilePlayerController::HandleInteractPressed);
             MobileControlsWidget->OnVehicleControlChanged.BindUObject(
@@ -187,6 +191,9 @@ void AGrandCityMobilePlayerController::SetupInputComponent()
     InputComponent->BindTouch(IE_Released, this, &AGrandCityMobilePlayerController::HandleTouchEnded);
     // Bound on the controller so the same key enters (on foot) and exits (driving).
     InputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &AGrandCityMobilePlayerController::HandleInteractPressed);
+    // PC shortcuts for the quest offer window (Y accept, U decline); ignored while no offer is open.
+    InputComponent->BindAction(TEXT("QuestAccept"), IE_Pressed, this, &AGrandCityMobilePlayerController::HandleQuestAcceptPressed);
+    InputComponent->BindAction(TEXT("QuestDecline"), IE_Pressed, this, &AGrandCityMobilePlayerController::HandleQuestDeclinePressed);
 }
 
 void AGrandCityMobilePlayerController::FlushPressedKeys()
@@ -395,6 +402,22 @@ void AGrandCityMobilePlayerController::HandleInteractPressed()
         return;
     }
 
+    // Quest givers and quest targets win over a car parked next to them.
+    if (QuestComponent && QuestComponent->TryLocalInteract())
+    {
+        return;
+    }
+
+    EnterNearbyVehicle();
+}
+
+void AGrandCityMobilePlayerController::EnterNearbyVehicle()
+{
+    if (Cast<AGrandCityVehicle>(GetPawn()))
+    {
+        return;
+    }
+
     // Refresh first so a key press right after walking up still finds the car.
     UpdateVehicleInteraction();
     if (AGrandCityVehicle* Vehicle = NearbyVehicle.Get())
@@ -431,9 +454,37 @@ void AGrandCityMobilePlayerController::UpdateVehicleInteraction()
     }
 
     NearbyVehicle = BestVehicle;
+    const bool bQuestInteractAvailable = QuestComponent && QuestComponent->UpdateLocalInteraction();
     if (MobileControlsWidget)
     {
         MobileControlsWidget->SetEnterVehicleAvailable(BestVehicle != nullptr);
+        MobileControlsWidget->SetQuestInteractAvailable(
+            bQuestInteractAvailable,
+            bQuestInteractAvailable ? QuestComponent->GetLocalInteractionLabel() : FText::GetEmpty());
+    }
+}
+
+void AGrandCityMobilePlayerController::HandleQuestInteractPressed()
+{
+    if (QuestComponent)
+    {
+        QuestComponent->TryLocalInteract();
+    }
+}
+
+void AGrandCityMobilePlayerController::HandleQuestAcceptPressed()
+{
+    if (QuestComponent)
+    {
+        QuestComponent->AcceptLocalOffer();
+    }
+}
+
+void AGrandCityMobilePlayerController::HandleQuestDeclinePressed()
+{
+    if (QuestComponent)
+    {
+        QuestComponent->DeclineLocalOffer();
     }
 }
 

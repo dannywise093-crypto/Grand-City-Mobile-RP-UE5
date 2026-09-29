@@ -45,6 +45,7 @@ public:
     FSimpleDelegate OnCrouchPressed;
     FSimpleDelegate OnEnterVehiclePressed;
     FSimpleDelegate OnExitVehiclePressed;
+    FSimpleDelegate OnQuestInteractPressed;
     FGrandCityVehicleControlDelegate OnVehicleControlChanged;
 
     void ShowFeedback(const FText& FeedbackText);
@@ -54,6 +55,8 @@ public:
     void SetVehicleMode(bool bInVehicle);
     /** Shows the ENTER button while the player stands next to a free vehicle. */
     void SetEnterVehicleAvailable(bool bAvailable);
+    /** Shows the quest button (QUEST / USE / DESTROY) while a quest action is in reach. */
+    void SetQuestInteractAvailable(bool bAvailable, const FText& Label);
 
 protected:
     virtual void NativeOnInitialized() override;
@@ -84,6 +87,9 @@ private:
 
     UFUNCTION()
     void HandleExitVehiclePressed();
+
+    UFUNCTION()
+    void HandleQuestInteractPressed();
 
     UFUNCTION()
     void HandleForwardPressed();
@@ -130,6 +136,9 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UButton> EnterVehicleButton;
 
+    UPROPERTY(Transient)
+    TObjectPtr<UButton> QuestInteractButton;
+
     /** On-foot buttons (RUN, JUMP, CROUCH). */
     UPROPERTY(Transient)
     TArray<TObjectPtr<UButton>> CharacterButtons;
@@ -140,4 +149,5 @@ private:
 
     bool bVehicleMode = false;
     bool bEnterVehicleAvailable = false;
+    bool bQuestInteractAvailable = false;
 };

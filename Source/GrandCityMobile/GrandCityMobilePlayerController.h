@@ -8,6 +8,7 @@
 #include "GrandCityMobilePlayerController.generated.h"
 
 class UGrandCityPlayerProfileComponent;
+class UGrandCityQuestComponent;
 class UGrandCityMobileControlsWidget;
 class SGrandCityVirtualJoystick;
 class SVirtualJoystick;
@@ -74,8 +75,15 @@ private:
     void HandleJumpFeedbackExpired();
     void HandleCrouchButtonPressed();
 
-    /** E key / ENTER / EXIT buttons: enter the nearby vehicle, or leave the current one. */
+    /** E key / EXIT button: leave the current vehicle, else a quest action, else enter the nearby vehicle. */
     void HandleInteractPressed();
+    /** ENTER button: vehicles only, so it never opens a quest while standing next to a car. */
+    void EnterNearbyVehicle();
+    /** QUEST / USE / DESTROY button: quest actions only. */
+    void HandleQuestInteractPressed();
+    /** Y / U keys: accept or decline the open quest offer window. */
+    void HandleQuestAcceptPressed();
+    void HandleQuestDeclinePressed();
     void HandleVehicleControlChanged(EGrandCityVehicleControl Control, bool bPressed);
     void ApplyTouchVehicleInput();
     void ResetTouchVehicleInput();
@@ -85,6 +93,9 @@ private:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Grand City|Persistence", meta=(AllowPrivateAccess="true"))
     TObjectPtr<UGrandCityPlayerProfileComponent> PlayerProfileComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Grand City|Quest", meta=(AllowPrivateAccess="true"))
+    TObjectPtr<UGrandCityQuestComponent> QuestComponent;
 
     UPROPERTY(Transient)
     TObjectPtr<UGrandCityMobileControlsWidget> MobileControlsWidget;
