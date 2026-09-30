@@ -5,6 +5,7 @@
 #include "GrandCityPlayerProfileComponent.h"
 #include "Quests/GrandCityQuestComponent.h"
 #include "Vehicles/GrandCityVehicle.h"
+#include "Vehicles/GrandCityVehicleUpgradeComponent.h"
 #include "Components/InputComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
@@ -106,6 +107,7 @@ AGrandCityMobilePlayerController::AGrandCityMobilePlayerController()
     bReplicates = true;
     PlayerProfileComponent = CreateDefaultSubobject<UGrandCityPlayerProfileComponent>(TEXT("PlayerProfileComponent"));
     QuestComponent = CreateDefaultSubobject<UGrandCityQuestComponent>(TEXT("QuestComponent"));
+    VehicleUpgradeComponent = CreateDefaultSubobject<UGrandCityVehicleUpgradeComponent>(TEXT("VehicleUpgradeComponent"));
 }
 
 void AGrandCityMobilePlayerController::BeginPlay()
@@ -134,7 +136,9 @@ void AGrandCityMobilePlayerController::BeginPlay()
             MobileControlsWidget->OnQuestInteractPressed.BindUObject(
                 this, &AGrandCityMobilePlayerController::HandleQuestInteractPressed);
             MobileControlsWidget->OnExitVehiclePressed.BindUObject(
-                this, &AGrandCityMobilePlayerController::HandleInteractPressed);
+                this, &AGrandCityMobilePlayerController::ExitCurrentVehicle);
+            MobileControlsWidget->OnVehicleInteractPressed.BindUObject(
+                this, &AGrandCityMobilePlayerController::HandleVehicleUpgradeInteractPressed);
             MobileControlsWidget->OnVehicleControlChanged.BindUObject(
                 this, &AGrandCityMobilePlayerController::HandleVehicleControlChanged);
             // The built-in virtual joystick is a full-screen Slate widget at
@@ -165,6 +169,7 @@ void AGrandCityMobilePlayerController::BeginPlay()
 void AGrandCityMobilePlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     GetWorldTimerManager().ClearTimer(VehicleInteractionTimer);
+    GetWorldTimerManager().ClearTimer(VehicleEnterTimer);
     HandleJumpButtonReleased();
     ResetTouchFeedback();
 
@@ -398,6 +403,11 @@ void AGrandCityMobilePlayerController::HandleInteractPressed()
 {
     if (Cast<AGrandCityVehicle>(GetPawn()))
     {
+        // A workshop the car is parked in wins over getting out.
+        if (VehicleUpgradeComponent && VehicleUpgradeComponent->TryLocalInteract())
+        {
+            return;
+        }
         ServerExitVehicle();
         return;
     }
@@ -409,6 +419,22 @@ void AGrandCityMobilePlayerController::HandleInteractPressed()
     }
 
     EnterNearbyVehicle();
+}
+
+void AGrandCityMobilePlayerController::ExitCurrentVehicle()
+{
+    if (Cast<AGrandCityVehicle>(GetPawn()))
+    {
+        ServerExitVehicle();
+    }
+}
+
+void AGrandCityMobilePlayerController::HandleVehicleUpgradeInteractPressed()
+{
+    if (VehicleUpgradeComponent)
+    {
+        VehicleUpgradeComponent->TryLocalInteract();
+    }
 }
 
 void AGrandCityMobilePlayerController::EnterNearbyVehicle()
@@ -432,7 +458,8 @@ void AGrandCityMobilePlayerController::UpdateVehicleInteraction()
 
     AGrandCityVehicle* BestVehicle = nullptr;
     const AGrandCityMobileCharacter* MobileCharacter = Cast<AGrandCityMobileCharacter>(GetPawn());
-    if (MobileCharacter && !MobileCharacter->GetOccupiedVehicle() && GetWorld())
+    if (MobileCharacter && !MobileCharacter->GetOccupiedVehicle() && !MobileCharacter->IsInVehicleTransition()
+        && GetWorld())
     {
         const FVector CharacterLocation = MobileCharacter->GetActorLocation();
         float BestDistance = TNumericLimits<float>::Max();
@@ -455,12 +482,19 @@ void AGrandCityMobilePlayerController::UpdateVehicleInteraction()
 
     NearbyVehicle = BestVehicle;
     const bool bQuestInteractAvailable = QuestComponent && QuestComponent->UpdateLocalInteraction();
+    const bool bUpgradeAvailable = VehicleUpgradeComponent && VehicleUpgradeComponent->UpdateLocalInteraction();
     if (MobileControlsWidget)
     {
         MobileControlsWidget->SetEnterVehicleAvailable(BestVehicle != nullptr);
         MobileControlsWidget->SetQuestInteractAvailable(
             bQuestInteractAvailable,
             bQuestInteractAvailable ? QuestComponent->GetLocalInteractionLabel() : FText::GetEmpty());
+        MobileControlsWidget->SetVehicleInteractAvailable(
+            bUpgradeAvailable,
+            bUpgradeAvailable ? VehicleUpgradeComponent->GetLocalInteractionLabel() : FText::GetEmpty());
+
+        const AGrandCityVehicle* DrivenVehicle = Cast<AGrandCityVehicle>(GetPawn());
+        MobileControlsWidget->SetBoostAvailable(DrivenVehicle && DrivenVehicle->HasNitroBoost());
     }
 }
 
@@ -474,17 +508,25 @@ void AGrandCityMobilePlayerController::HandleQuestInteractPressed()
 
 void AGrandCityMobilePlayerController::HandleQuestAcceptPressed()
 {
-    if (QuestComponent)
+    if (QuestComponent && QuestComponent->AcceptLocalOffer())
     {
-        QuestComponent->AcceptLocalOffer();
+        return;
+    }
+    if (VehicleUpgradeComponent)
+    {
+        VehicleUpgradeComponent->AcceptLocalOffer();
     }
 }
 
 void AGrandCityMobilePlayerController::HandleQuestDeclinePressed()
 {
-    if (QuestComponent)
+    if (QuestComponent && QuestComponent->DeclineLocalOffer())
     {
-        QuestComponent->DeclineLocalOffer();
+        return;
+    }
+    if (VehicleUpgradeComponent)
+    {
+        VehicleUpgradeComponent->DeclineLocalOffer();
     }
 }
 
@@ -542,6 +584,9 @@ void AGrandCityMobilePlayerController::HandleVehicleControlChanged(EGrandCityVeh
     case EGrandCityVehicleControl::SteerRight:
         bTouchSteerRightHeld = bPressed;
         break;
+    case EGrandCityVehicleControl::Boost:
+        bTouchBoostHeld = bPressed;
+        break;
     }
 
     ApplyTouchVehicleInput();
@@ -554,6 +599,7 @@ void AGrandCityMobilePlayerController::ApplyTouchVehicleInput()
         Vehicle->SetTouchThrottle((bTouchForwardHeld ? 1.0f : 0.0f) - (bTouchReverseHeld ? 1.0f : 0.0f));
         Vehicle->SetTouchSteering((bTouchSteerRightHeld ? 1.0f : 0.0f) - (bTouchSteerLeftHeld ? 1.0f : 0.0f));
         Vehicle->SetTouchBrake(bTouchBrakeHeld);
+        Vehicle->SetTouchBoost(bTouchBoostHeld);
     }
 }
 
@@ -564,13 +610,15 @@ void AGrandCityMobilePlayerController::ResetTouchVehicleInput()
     bTouchBrakeHeld = false;
     bTouchSteerLeftHeld = false;
     bTouchSteerRightHeld = false;
+    bTouchBoostHeld = false;
     ApplyTouchVehicleInput();
 }
 
 void AGrandCityMobilePlayerController::ServerEnterVehicle_Implementation(AGrandCityVehicle* Vehicle)
 {
     AGrandCityMobileCharacter* MobileCharacter = Cast<AGrandCityMobileCharacter>(GetPawn());
-    if (!MobileCharacter || !Vehicle || Vehicle->HasDriver() || MobileCharacter->GetOccupiedVehicle())
+    if (!MobileCharacter || !Vehicle || Vehicle->HasDriver() || MobileCharacter->GetOccupiedVehicle()
+        || MobileCharacter->IsInVehicleTransition() || PendingEnterVehicle.IsValid())
     {
         return;
     }
@@ -582,7 +630,43 @@ void AGrandCityMobilePlayerController::ServerEnterVehicle_Implementation(AGrandC
         return;
     }
 
+    // Reserve the seat now so nobody else takes the car during the animation.
     Vehicle->SetDriver(MobileCharacter);
+    PendingEnterVehicle = Vehicle;
+
+    const float AnimationDuration = MobileCharacter->PlayEnterVehicleAnimation(Vehicle);
+    if (AnimationDuration > 0.0f)
+    {
+        GetWorldTimerManager().SetTimer(
+            VehicleEnterTimer, this, &AGrandCityMobilePlayerController::FinishEnterVehicle, AnimationDuration, false);
+    }
+    else
+    {
+        // No room beside the driver door (or no clip): get in instantly.
+        FinishEnterVehicle();
+    }
+}
+
+void AGrandCityMobilePlayerController::FinishEnterVehicle()
+{
+    GetWorldTimerManager().ClearTimer(VehicleEnterTimer);
+    AGrandCityVehicle* Vehicle = PendingEnterVehicle.Get();
+    PendingEnterVehicle.Reset();
+
+    AGrandCityMobileCharacter* MobileCharacter = Cast<AGrandCityMobileCharacter>(GetPawn());
+    if (!Vehicle || !MobileCharacter || Vehicle->GetDriver() != MobileCharacter)
+    {
+        if (MobileCharacter)
+        {
+            MobileCharacter->CancelVehicleAnimation();
+        }
+        if (Vehicle && Vehicle->GetDriver() == MobileCharacter)
+        {
+            Vehicle->SetDriver(nullptr);
+        }
+        return;
+    }
+
     MobileCharacter->EnterVehicle(Vehicle);
     Possess(Vehicle);
     UE_LOG(LogGrandCityMobileControls, Log, TEXT("%s entered %s."), *GetNameSafe(this), *GetNameSafe(Vehicle));
@@ -597,9 +681,14 @@ void AGrandCityMobilePlayerController::ServerExitVehicle_Implementation()
         return;
     }
 
+    // The exit animation needs the car (nearly) stopped and a free spot at the driver
+    // door; otherwise the driver jumps straight out at the nearest free side.
+    constexpr float MaxAnimatedExitSpeed = 150.0f;
     FVector ExitLocation;
     FRotator ExitRotation;
-    if (!Vehicle->FindExitTransform(MobileCharacter, ExitLocation, ExitRotation))
+    const bool bAnimatedExit = FMath::Abs(Vehicle->GetForwardSpeed()) <= MaxAnimatedExitSpeed
+        && MobileCharacter->FindAnimatedVehicleExit(Vehicle, ExitLocation, ExitRotation);
+    if (!bAnimatedExit && !Vehicle->FindExitTransform(MobileCharacter, ExitLocation, ExitRotation))
     {
         // Boxed in: stay in the car rather than spawning inside a wall.
         UE_LOG(LogGrandCityMobileControls, Warning, TEXT("No free exit spot around %s."), *GetNameSafe(Vehicle));
@@ -609,8 +698,13 @@ void AGrandCityMobilePlayerController::ServerExitVehicle_Implementation()
     Vehicle->SetDriver(nullptr);
     MobileCharacter->ExitVehicle(ExitLocation, ExitRotation);
     Possess(MobileCharacter);
-    // Put the on-foot camera behind the character, looking the way the car faced.
-    ClientSetRotation(FRotator(-10.0f, ExitRotation.Yaw, 0.0f));
+    if (bAnimatedExit)
+    {
+        MobileCharacter->PlayExitVehicleAnimation(Vehicle);
+    }
+    // Keep looking the way the car faced: behind the car for an instant exit, a side
+    // view of the driver door for the animated one.
+    ClientSetRotation(FRotator(-10.0f, bAnimatedExit ? Vehicle->GetActorRotation().Yaw : ExitRotation.Yaw, 0.0f));
     UE_LOG(LogGrandCityMobileControls, Log, TEXT("%s exited %s."), *GetNameSafe(this), *GetNameSafe(Vehicle));
 }
 
@@ -627,6 +721,17 @@ void AGrandCityMobilePlayerController::PawnLeavingGame()
             Driver->Destroy();
         }
         return;
+    }
+
+    // Leaving mid enter-animation: release the reserved car before the body is destroyed.
+    if (AGrandCityVehicle* Vehicle = PendingEnterVehicle.Get())
+    {
+        GetWorldTimerManager().ClearTimer(VehicleEnterTimer);
+        PendingEnterVehicle.Reset();
+        if (Vehicle->GetDriver() == GetPawn())
+        {
+            Vehicle->SetDriver(nullptr);
+        }
     }
 
     Super::PawnLeavingGame();

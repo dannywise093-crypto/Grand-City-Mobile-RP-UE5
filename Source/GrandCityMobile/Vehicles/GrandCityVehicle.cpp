@@ -9,6 +9,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -21,6 +22,23 @@ constexpr float ServerUpdateInterval = 1.0f / 30.0f;
 constexpr float ProxyInterpSpeed = 12.0f;
 constexpr float ProxySnapDistance = 1000.0f;
 constexpr int32 MaxSlideIterations = 3;
+constexpr float NitroCameraInterpSpeed = 4.0f;
+const FName PaintColorParameter(TEXT("PaintColor"));
+const FName PaintTintAmountParameter(TEXT("PaintTintAmount"));
+
+bool IsInstanceOf(const UMaterialInterface* Material, const UMaterialInterface* Base)
+{
+    for (const UMaterialInterface* Current = Material; Current;)
+    {
+        if (Current == Base)
+        {
+            return true;
+        }
+        const UMaterialInstance* Instance = Cast<UMaterialInstance>(Current);
+        Current = Instance ? Instance->Parent.Get() : nullptr;
+    }
+    return false;
+}
 }
 
 AGrandCityVehicle::AGrandCityVehicle()
@@ -56,6 +74,13 @@ AGrandCityVehicle::AGrandCityVehicle()
         VehicleBody->SetStaticMesh(VehicleMesh.Object);
     }
 
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> BodyMaterial(
+        TEXT("/Game/VehicleVarietyPack/Materials/Pickup/M_Pickup_Body.M_Pickup_Body"));
+    if (BodyMaterial.Succeeded())
+    {
+        PaintableMaterial = BodyMaterial.Object;
+    }
+
     CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
     CameraBoom->SetupAttachment(CollisionBox);
     CameraBoom->SetRelativeLocation(FVector(0.0f, 0.0f, 90.0f));
@@ -88,6 +113,61 @@ void AGrandCityVehicle::BeginPlay()
 {
     Super::BeginPlay();
     FitCollisionToMesh();
+    BaseCameraFOV = FollowCamera->FieldOfView;
+    ApplyPaint();
+}
+
+void AGrandCityVehicle::SetPaintColor(const FLinearColor& NewColor)
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    bHasCustomPaint = true;
+    PaintColor = NewColor;
+    ApplyPaint();
+    ForceNetUpdate();
+}
+
+void AGrandCityVehicle::OnRep_Paint()
+{
+    ApplyPaint();
+}
+
+void AGrandCityVehicle::ApplyPaint()
+{
+    if (!VehicleBody || !PaintableMaterial)
+    {
+        return;
+    }
+
+    for (int32 SlotIndex = 0; SlotIndex < VehicleBody->GetNumMaterials(); ++SlotIndex)
+    {
+        UMaterialInterface* Material = VehicleBody->GetMaterial(SlotIndex);
+        if (!IsInstanceOf(Material, PaintableMaterial))
+        {
+            continue;
+        }
+
+        UMaterialInstanceDynamic* PaintInstance = Cast<UMaterialInstanceDynamic>(Material);
+        if (!PaintInstance)
+        {
+            // Factory paint needs no instance; keep sharing the asset until the first repaint.
+            if (!bHasCustomPaint)
+            {
+                continue;
+            }
+            PaintInstance = VehicleBody->CreateAndSetMaterialInstanceDynamic(SlotIndex);
+            if (!PaintInstance)
+            {
+                continue;
+            }
+        }
+
+        PaintInstance->SetVectorParameterValue(PaintColorParameter, PaintColor);
+        PaintInstance->SetScalarParameterValue(PaintTintAmountParameter, bHasCustomPaint ? 1.0f : 0.0f);
+    }
 }
 
 void AGrandCityVehicle::FitCollisionToMesh()
@@ -121,12 +201,17 @@ void AGrandCityVehicle::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
     PlayerInputComponent->BindAxis(TEXT("VehicleSteer"), this, &AGrandCityVehicle::KeyboardSteer);
     PlayerInputComponent->BindAction(TEXT("VehicleBrake"), IE_Pressed, this, &AGrandCityVehicle::KeyboardBrakePressed);
     PlayerInputComponent->BindAction(TEXT("VehicleBrake"), IE_Released, this, &AGrandCityVehicle::KeyboardBrakeReleased);
+    PlayerInputComponent->BindAction(TEXT("VehicleBoost"), IE_Pressed, this, &AGrandCityVehicle::KeyboardBoostPressed);
+    PlayerInputComponent->BindAction(TEXT("VehicleBoost"), IE_Released, this, &AGrandCityVehicle::KeyboardBoostReleased);
 }
 
 void AGrandCityVehicle::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(AGrandCityVehicle, Driver);
+    DOREPLIFETIME(AGrandCityVehicle, bHasNitroBoost);
+    DOREPLIFETIME(AGrandCityVehicle, bHasCustomPaint);
+    DOREPLIFETIME(AGrandCityVehicle, PaintColor);
 }
 
 void AGrandCityVehicle::KeyboardThrottle(float Value)
@@ -149,6 +234,16 @@ void AGrandCityVehicle::KeyboardBrakeReleased()
     bKeyboardBrakeHeld = false;
 }
 
+void AGrandCityVehicle::KeyboardBoostPressed()
+{
+    bKeyboardBoostHeld = true;
+}
+
+void AGrandCityVehicle::KeyboardBoostReleased()
+{
+    bKeyboardBoostHeld = false;
+}
+
 void AGrandCityVehicle::ClearDriverInput()
 {
     KeyboardThrottleInput = 0.0f;
@@ -157,6 +252,26 @@ void AGrandCityVehicle::ClearDriverInput()
     TouchSteeringInput = 0.0f;
     bKeyboardBrakeHeld = false;
     bTouchBrakeHeld = false;
+    bKeyboardBoostHeld = false;
+    bTouchBoostHeld = false;
+}
+
+void AGrandCityVehicle::InstallNitroBoost()
+{
+    if (!HasAuthority() || bHasNitroBoost)
+    {
+        return;
+    }
+
+    bHasNitroBoost = true;
+    NitroCharge = 1.0f;
+    bNitroDepleted = false;
+    ForceNetUpdate();
+}
+
+float AGrandCityVehicle::GetTopSpeed() const
+{
+    return bHasNitroBoost ? MaxForwardSpeed * NitroSpeedMultiplier : MaxForwardSpeed;
 }
 
 void AGrandCityVehicle::SetDriver(AGrandCityMobileCharacter* NewDriver)
@@ -175,6 +290,8 @@ void AGrandCityVehicle::UnPossessed()
 {
     Super::UnPossessed();
     ClearDriverInput();
+    bNitroActive = false;
+    FollowCamera->SetFieldOfView(BaseCameraFOV);
 }
 
 void AGrandCityVehicle::Tick(float DeltaSeconds)
@@ -190,7 +307,15 @@ void AGrandCityVehicle::Tick(float DeltaSeconds)
     {
         const float Throttle = FMath::Clamp(KeyboardThrottleInput + TouchThrottleInput, -1.0f, 1.0f);
         const float Steering = FMath::Clamp(KeyboardSteeringInput + TouchSteeringInput, -1.0f, 1.0f);
-        SimulateMovement(DeltaSeconds, Throttle, Steering, bKeyboardBrakeHeld || bTouchBrakeHeld);
+        const bool bBrake = bKeyboardBrakeHeld || bTouchBrakeHeld;
+
+        // Nitro pushes forward only: braking, reversing or rolling backward cancel it.
+        const bool bWantsBoost = (bKeyboardBoostHeld || bTouchBoostHeld)
+            && !bBrake && Throttle > -KINDA_SMALL_NUMBER && ForwardSpeed > -1.0f;
+        UpdateNitro(DeltaSeconds, bWantsBoost);
+        // Boosting drives the car on its own, no need to hold the throttle too.
+        SimulateMovement(DeltaSeconds, bNitroActive ? 1.0f : Throttle, Steering, bBrake);
+        UpdateNitroCamera(DeltaSeconds);
 
         if (!HasAuthority())
         {
@@ -218,6 +343,46 @@ void AGrandCityVehicle::Tick(float DeltaSeconds)
     {
         TickSimulatedProxy(DeltaSeconds);
     }
+
+    if (!IsLocallyControlled())
+    {
+        // A parked car keeps refilling, so the next driver finds the tank topped up.
+        UpdateNitro(DeltaSeconds, false);
+    }
+}
+
+void AGrandCityVehicle::UpdateNitro(float DeltaSeconds, bool bWantsBoost)
+{
+    bNitroActive = bHasNitroBoost && bWantsBoost && !bNitroDepleted && NitroCharge > 0.0f;
+    if (bNitroActive)
+    {
+        NitroCharge = FMath::Max(NitroCharge - DeltaSeconds / NitroDuration, 0.0f);
+        NitroRechargeDelayLeft = NitroRechargeDelay;
+        bNitroDepleted = NitroCharge <= 0.0f;
+        return;
+    }
+
+    if (NitroRechargeDelayLeft > 0.0f)
+    {
+        NitroRechargeDelayLeft -= DeltaSeconds;
+        return;
+    }
+
+    NitroCharge = FMath::Min(NitroCharge + DeltaSeconds / NitroRechargeDuration, 1.0f);
+    if (bNitroDepleted && NitroCharge >= NitroReadyCharge)
+    {
+        bNitroDepleted = false;
+    }
+}
+
+void AGrandCityVehicle::UpdateNitroCamera(float DeltaSeconds)
+{
+    const float TargetFOV = BaseCameraFOV + (bNitroActive ? NitroCameraFOVBoost : 0.0f);
+    if (!FMath::IsNearlyEqual(FollowCamera->FieldOfView, TargetFOV, 0.01f))
+    {
+        FollowCamera->SetFieldOfView(
+            FMath::FInterpTo(FollowCamera->FieldOfView, TargetFOV, DeltaSeconds, NitroCameraInterpSpeed));
+    }
 }
 
 void AGrandCityVehicle::UpdateSpeed(float DeltaSeconds, float Throttle, bool bBrake)
@@ -232,6 +397,15 @@ void AGrandCityVehicle::UpdateSpeed(float DeltaSeconds, float Throttle, bool bBr
         {
             // Pressing forward while rolling backward brakes first.
             ForwardSpeed = FMath::FInterpConstantTo(ForwardSpeed, 0.0f, DeltaSeconds, BrakeDeceleration);
+        }
+        else if (bNitroActive)
+        {
+            ForwardSpeed = FMath::Min(ForwardSpeed + NitroAcceleration * DeltaSeconds, GetTopSpeed());
+        }
+        else if (ForwardSpeed > MaxForwardSpeed)
+        {
+            // Coming off a boost: ease back down to the normal top speed.
+            ForwardSpeed = FMath::FInterpConstantTo(ForwardSpeed, MaxForwardSpeed, DeltaSeconds, CoastDeceleration);
         }
         else if (ForwardSpeed < MaxForwardSpeed)
         {
@@ -451,13 +625,13 @@ void AGrandCityVehicle::ServerUpdateMovement_Implementation(
     float NewForwardSpeed)
 {
     // Reject obviously impossible jumps (packets from a stale session, cheats).
-    const float MaxStep = FMath::Max(MaxForwardSpeed, MaxReverseSpeed) + 1000.0f;
+    const float MaxStep = FMath::Max(GetTopSpeed(), MaxReverseSpeed) + 1000.0f;
     if (FVector::DistSquared(GetActorLocation(), NewLocation) > FMath::Square(MaxStep))
     {
         return;
     }
 
-    ForwardSpeed = FMath::Clamp(NewForwardSpeed, -MaxReverseSpeed, MaxForwardSpeed);
+    ForwardSpeed = FMath::Clamp(NewForwardSpeed, -MaxReverseSpeed, GetTopSpeed());
     bIsGrounded = false;
     SetActorLocationAndRotation(NewLocation, NewRotation, false);
 }
@@ -515,6 +689,19 @@ float AGrandCityVehicle::GetDistanceToVehicle(const FVector& WorldPoint) const
 float AGrandCityVehicle::GetRoofHeight() const
 {
     return CollisionBox ? CollisionBox->GetScaledBoxExtent().Z : 0.0f;
+}
+
+FTransform AGrandCityVehicle::GetDriverSeatTransform(bool bFollowTilt) const
+{
+    const FVector Up = GetActorUpVector();
+    const float GroundDepth = GetRoofHeight() + GroundClearance + RideHeightOffset;
+    const FVector SeatLocation = GetActorTransform().TransformPosition(FVector(DriverSeatOffset.X, DriverSeatOffset.Y, 0.0f))
+        - Up * GroundDepth
+        + Up * DriverSeatOffset.Z;
+    const FQuat SeatRotation = bFollowTilt
+        ? GetActorQuat()
+        : FRotator(0.0f, GetActorRotation().Yaw, 0.0f).Quaternion();
+    return FTransform(SeatRotation, SeatLocation);
 }
 
 bool AGrandCityVehicle::FindExitTransform(

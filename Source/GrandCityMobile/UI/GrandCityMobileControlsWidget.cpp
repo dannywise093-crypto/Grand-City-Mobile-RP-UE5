@@ -178,6 +178,29 @@ void UGrandCityMobileControlsWidget::NativeOnInitialized()
         VehicleButtons.Add(SteerRightButton);
     }
 
+    // Driving extras, shown only when they apply: BOOST above the brake pedal (cars with
+    // nitro), WORKSHOP above EXIT (parked at a vehicle workshop).
+    BoostButton = CreateActionButton(
+        RootCanvas, TEXT("VehicleBoostButton"),
+        NSLOCTEXT("GrandCityMobileControls", "VehicleBoostButton", "BOOST"),
+        FVector2D(-208.0f, -288.0f), BottomRight, FVector2D(150.0f, 112.0f), true);
+    VehicleInteractButton = CreateActionButton(
+        RootCanvas, TEXT("VehicleInteractButton"),
+        NSLOCTEXT("GrandCityMobileControls", "VehicleInteractButton", "WORKSHOP"),
+        FVector2D(-32.0f, -400.0f), BottomRight, FVector2D(160.0f, 80.0f));
+
+    if (BoostButton)
+    {
+        BoostButton->SetBackgroundColor(FLinearColor(0.02f, 0.3f, 0.55f, 0.9f));
+        BoostButton->OnPressed.AddDynamic(this, &UGrandCityMobileControlsWidget::HandleBoostPressed);
+        BoostButton->OnReleased.AddDynamic(this, &UGrandCityMobileControlsWidget::HandleBoostReleased);
+    }
+    if (VehicleInteractButton)
+    {
+        VehicleInteractButton->SetBackgroundColor(FLinearColor(0.05f, 0.45f, 0.15f, 0.9f));
+        VehicleInteractButton->OnClicked.AddDynamic(this, &UGrandCityMobileControlsWidget::HandleVehicleInteractPressed);
+    }
+
     RefreshButtonVisibility();
 }
 
@@ -203,17 +226,22 @@ void UGrandCityMobileControlsWidget::SetEnterVehicleAvailable(bool bAvailable)
     RefreshButtonVisibility();
 }
 
+void UGrandCityMobileControlsWidget::SetButtonLabel(UButton* Button, const FText& Label)
+{
+    if (UTextBlock* ButtonLabel = Button ? Cast<UTextBlock>(Button->GetContent()) : nullptr)
+    {
+        if (!ButtonLabel->GetText().EqualTo(Label))
+        {
+            ButtonLabel->SetText(Label);
+        }
+    }
+}
+
 void UGrandCityMobileControlsWidget::SetQuestInteractAvailable(bool bAvailable, const FText& Label)
 {
-    if (QuestInteractButton && bAvailable)
+    if (bAvailable)
     {
-        if (UTextBlock* ButtonLabel = Cast<UTextBlock>(QuestInteractButton->GetContent()))
-        {
-            if (!ButtonLabel->GetText().EqualTo(Label))
-            {
-                ButtonLabel->SetText(Label);
-            }
-        }
+        SetButtonLabel(QuestInteractButton, Label);
     }
 
     if (bQuestInteractAvailable == bAvailable)
@@ -222,6 +250,33 @@ void UGrandCityMobileControlsWidget::SetQuestInteractAvailable(bool bAvailable, 
     }
 
     bQuestInteractAvailable = bAvailable;
+    RefreshButtonVisibility();
+}
+
+void UGrandCityMobileControlsWidget::SetVehicleInteractAvailable(bool bAvailable, const FText& Label)
+{
+    if (bAvailable)
+    {
+        SetButtonLabel(VehicleInteractButton, Label);
+    }
+
+    if (bVehicleInteractAvailable == bAvailable)
+    {
+        return;
+    }
+
+    bVehicleInteractAvailable = bAvailable;
+    RefreshButtonVisibility();
+}
+
+void UGrandCityMobileControlsWidget::SetBoostAvailable(bool bAvailable)
+{
+    if (bBoostAvailable == bAvailable)
+    {
+        return;
+    }
+
+    bBoostAvailable = bAvailable;
     RefreshButtonVisibility();
 }
 
@@ -246,6 +301,18 @@ void UGrandCityMobileControlsWidget::RefreshButtonVisibility()
     if (QuestInteractButton)
     {
         QuestInteractButton->SetVisibility(!bVehicleMode && bQuestInteractAvailable
+            ? ESlateVisibility::Visible
+            : ESlateVisibility::Collapsed);
+    }
+    if (VehicleInteractButton)
+    {
+        VehicleInteractButton->SetVisibility(bVehicleMode && bVehicleInteractAvailable
+            ? ESlateVisibility::Visible
+            : ESlateVisibility::Collapsed);
+    }
+    if (BoostButton)
+    {
+        BoostButton->SetVisibility(bVehicleMode && bBoostAvailable
             ? ESlateVisibility::Visible
             : ESlateVisibility::Collapsed);
     }
@@ -406,4 +473,19 @@ void UGrandCityMobileControlsWidget::HandleSteerRightPressed()
 void UGrandCityMobileControlsWidget::HandleSteerRightReleased()
 {
     OnVehicleControlChanged.ExecuteIfBound(EGrandCityVehicleControl::SteerRight, false);
+}
+
+void UGrandCityMobileControlsWidget::HandleBoostPressed()
+{
+    OnVehicleControlChanged.ExecuteIfBound(EGrandCityVehicleControl::Boost, true);
+}
+
+void UGrandCityMobileControlsWidget::HandleBoostReleased()
+{
+    OnVehicleControlChanged.ExecuteIfBound(EGrandCityVehicleControl::Boost, false);
+}
+
+void UGrandCityMobileControlsWidget::HandleVehicleInteractPressed()
+{
+    OnVehicleInteractPressed.ExecuteIfBound();
 }

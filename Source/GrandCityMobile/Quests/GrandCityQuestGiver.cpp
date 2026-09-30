@@ -5,7 +5,16 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
+
+namespace GrandCityQuestGiver
+{
+    const FLinearColor QuestBeaconColor(1.0f, 0.05f, 0.05f);
+    const FLinearColor MinigameBeaconColor(1.0f, 0.85f, 0.0f);
+    /** Gap between the top of the beacon and the title text. */
+    constexpr float LabelAboveBeacon = 60.0f;
+}
 
 AGrandCityQuestGiver::AGrandCityQuestGiver()
 {
@@ -28,13 +37,19 @@ AGrandCityQuestGiver::AGrandCityQuestGiver()
     Marker = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Marker"));
     Marker->SetupAttachment(Root);
     Marker->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    Marker->SetRelativeLocation(FVector(0.0f, 0.0f, 5.0f));
-    Marker->SetRelativeScale3D(FVector(1.5f, 1.5f, 0.05f));
+    Marker->SetCanEverAffectNavigation(false);
     Marker->CastShadow = false;
     static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
     if (CylinderMesh.Succeeded())
     {
         Marker->SetStaticMesh(CylinderMesh.Object);
+    }
+    // Translucent unlit; colour and opacity come from custom primitive data 0-3 and 4.
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> BeaconMaterial(
+        TEXT("/Game/Quests/Materials/M_QuestBeacon.M_QuestBeacon"));
+    if (BeaconMaterial.Succeeded())
+    {
+        Marker->SetMaterial(0, BeaconMaterial.Object);
     }
 
     Label = CreateDefaultSubobject<UTextRenderComponent>(TEXT("Label"));
@@ -57,6 +72,35 @@ void AGrandCityQuestGiver::OnConstruction(const FTransform& Transform)
             ? NSLOCTEXT("GrandCityQuest", "GiverMinigameLabel", "MINIGAME")
             : NSLOCTEXT("GrandCityQuest", "GiverDefaultLabel", "QUEST");
         Label->SetText(Quest.Title.IsEmpty() ? DefaultLabel : Quest.Title);
+    }
+    UpdateBeacon();
+}
+
+void AGrandCityQuestGiver::UpdateBeacon()
+{
+    if (!Marker || !TriggerArea)
+    {
+        return;
+    }
+
+    // A tube standing on the bottom of the trigger box, as wide as the box's shorter side.
+    const FVector Extent = TriggerArea->GetScaledBoxExtent();
+    const FVector Up = TriggerArea->GetUpVector();
+    const FVector Bottom = TriggerArea->GetComponentLocation() - Up * Extent.Z;
+    const float Diameter = 2.0f * FMath::Min(Extent.X, Extent.Y);
+    // The engine cylinder is 100 cm wide and tall, centred on its pivot.
+    Marker->SetWorldLocationAndRotation(Bottom + Up * (BeaconHeight * 0.5f), TriggerArea->GetComponentQuat());
+    Marker->SetWorldScale3D(FVector(Diameter / 100.0f, Diameter / 100.0f, BeaconHeight / 100.0f));
+
+    const FLinearColor Color = bIsMinigame
+        ? GrandCityQuestGiver::MinigameBeaconColor
+        : GrandCityQuestGiver::QuestBeaconColor;
+    Marker->SetDefaultCustomPrimitiveDataVector4(0, FVector4(Color.R, Color.G, Color.B, 1.0f));
+    Marker->SetDefaultCustomPrimitiveDataFloat(4, BeaconOpacity);
+
+    if (Label)
+    {
+        Label->SetWorldLocation(Bottom + Up * (BeaconHeight + GrandCityQuestGiver::LabelAboveBeacon));
     }
 }
 
