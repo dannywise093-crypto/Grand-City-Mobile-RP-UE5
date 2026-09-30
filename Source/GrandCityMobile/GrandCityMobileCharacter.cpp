@@ -1,9 +1,11 @@
 #include "GrandCityMobileCharacter.h"
 #include "Vehicles/GrandCityVehicle.h"
 #include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/Skeleton.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -26,6 +28,37 @@ constexpr float CrouchMovementPauseDuration = CrouchAnimationBlendTime + 0.05f;
 constexpr float CrouchTransitionMoveSpeed = 20.0f;
 constexpr int32 CrouchAnimationLoopCount = 100000;
 const FName CrouchAnimationSlotName(TEXT("DefaultSlot"));
+constexpr float VehicleMontageBlendTime = 0.25f;
+
+/** Component-space location of a bone in an animation at the given time (composes up to the root). */
+bool SampleComponentBoneLocation(const UAnimSequence* Animation, FName BoneName, double Time, FVector& OutLocation)
+{
+    const USkeleton* Skeleton = Animation ? Animation->GetSkeleton() : nullptr;
+    if (!Skeleton)
+    {
+        return false;
+    }
+
+    const FReferenceSkeleton& ReferenceSkeleton = Skeleton->GetReferenceSkeleton();
+    int32 BoneIndex = ReferenceSkeleton.FindBoneIndex(BoneName);
+    if (BoneIndex == INDEX_NONE)
+    {
+        return false;
+    }
+
+    const FAnimExtractContext ExtractContext(Time);
+    FTransform ComponentTransform = FTransform::Identity;
+    while (BoneIndex != INDEX_NONE)
+    {
+        FTransform LocalTransform;
+        Animation->GetBoneTransform(LocalTransform, FSkeletonPoseBoneIndex(BoneIndex), ExtractContext, false);
+        ComponentTransform = ComponentTransform * LocalTransform;
+        BoneIndex = ReferenceSkeleton.GetParentIndex(BoneIndex);
+    }
+
+    OutLocation = ComponentTransform.GetLocation();
+    return true;
+}
 }
 
 #if !UE_BUILD_SHIPPING
@@ -71,6 +104,13 @@ AGrandCityMobileCharacter::AGrandCityMobileCharacter()
     static ConstructorHelpers::FObjectFinder<UAnimSequence> CrouchWalkRight(
         TEXT("/Game/Characters/Mannequins/Anims/CrouchFixed/MM_Unarmed_Crouch_Walk_Right.MM_Unarmed_Crouch_Walk_Right"));
 
+    static ConstructorHelpers::FObjectFinder<UAnimSequence> CarEnter(
+        TEXT("/Game/Characters/Mannequins/Anims/Vehicle/MM_Car_Enter.MM_Car_Enter"));
+    static ConstructorHelpers::FObjectFinder<UAnimSequence> CarExit(
+        TEXT("/Game/Characters/Mannequins/Anims/Vehicle/MM_Car_Exit.MM_Car_Exit"));
+    EnterVehicleAnimation = CarEnter.Object;
+    ExitVehicleAnimation = CarExit.Object;
+
     CrouchEntryAnimation = CrouchEntry.Object;
     CrouchExitAnimation = CrouchExit.Object;
     CrouchIdleAnimation = CrouchIdle.Object;
@@ -110,6 +150,11 @@ void AGrandCityMobileCharacter::BeginPlay()
     if (USkeletalMeshComponent* MeshComponent = GetMesh())
     {
         StandingAnimInstanceClass = MeshComponent->GetAnimClass();
+        DefaultMeshRelativeLocation = MeshComponent->GetRelativeLocation();
+        DefaultMeshRelativeRotation = MeshComponent->GetRelativeRotation();
+        BoneTransformsFinalizedHandle = MeshComponent->RegisterOnBoneTransformsFinalizedDelegate(
+            FOnBoneTransformsFinalizedMultiCast::FDelegate::CreateUObject(
+                this, &AGrandCityMobileCharacter::HandleBoneTransformsFinalized));
     }
 }
 
@@ -120,6 +165,12 @@ void AGrandCityMobileCharacter::Tick(float DeltaSeconds)
 #if !UE_BUILD_SHIPPING
     TickCrouchMovementPlaytest();
 #endif
+
+    if (IsInVehicleTransition())
+    {
+        TickVehicleTransition(DeltaSeconds);
+        return;
+    }
 
     if (bCrouchMovementPaused)
     {
@@ -193,9 +244,13 @@ void AGrandCityMobileCharacter::EnterVehicle(AGrandCityVehicle* Vehicle)
     RightInputValue = 0.0f;
 
     OccupiedVehicle = Vehicle;
-    // Ride along hidden inside the vehicle so the character's replicated
-    // location stays with the car (relevancy, profile saves, exit fallback).
+    // Sit in the driver seat and ride along with the car. With the default mesh offset
+    // the animation root lands on the seat, where the held seated pose expects it.
     AttachToActor(Vehicle, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+    const FTransform Seat = Vehicle->GetDriverSeatTransform(true);
+    SetActorLocationAndRotation(
+        Seat.GetLocation() - Seat.GetRotation().GetUpVector() * DefaultMeshRelativeLocation.Z,
+        Seat.GetRotation());
     ApplyOccupiedVehicleState();
     ForceNetUpdate();
 }
@@ -222,13 +277,34 @@ void AGrandCityMobileCharacter::OnRep_OccupiedVehicle()
 void AGrandCityMobileCharacter::ApplyOccupiedVehicleState()
 {
     const bool bInVehicle = OccupiedVehicle != nullptr;
-    SetActorHiddenInGame(bInVehicle);
-    SetActorEnableCollision(!bInVehicle);
+    if (bInVehicle && VehicleTransition == EGrandCityVehicleTransition::Entering)
+    {
+        // Seated: the seated pose below replaces the enter clip's last frame.
+        EndVehicleTransition(false);
+    }
+
+    // In the car and during enter/exit clips the character stays frozen and
+    // non-colliding (the multicast and this OnRep may arrive in either order on
+    // clients, hence the transition check).
+    const bool bFrozen = bInVehicle || IsInVehicleTransition();
+    SetActorHiddenInGame(false);
+    SetActorEnableCollision(!bFrozen);
     ApplyMovementSpeed();
+
+    if (bInVehicle)
+    {
+        PlaySeatedPose();
+    }
+    else if (!IsInVehicleTransition())
+    {
+        // Instant exit (no clip): drop the seated pose straight away.
+        StopSeatedPose();
+        RestoreDefaultMeshPlacement();
+    }
 
     if (UCharacterMovementComponent* MovementComponent = GetCharacterMovement())
     {
-        if (bInVehicle)
+        if (bFrozen)
         {
             MovementComponent->StopMovementImmediately();
             MovementComponent->DisableMovement();
@@ -239,6 +315,517 @@ void AGrandCityMobileCharacter::ApplyOccupiedVehicleState()
             MovementComponent->SetMovementMode(MOVE_Walking);
         }
     }
+}
+
+float AGrandCityMobileCharacter::PlayEnterVehicleAnimation(AGrandCityVehicle* Vehicle)
+{
+    if (!HasAuthority() || !Vehicle || !EnterVehicleAnimation || IsInVehicleTransition()
+        || bIsCrouched || WantsToCrouch())
+    {
+        return 0.0f;
+    }
+
+    // Work backwards from the seat: the clip starts beside the driver door, facing the
+    // car, and walks the pelvis EnterAnimationSeatOffset into the seat.
+    const FTransform Seat = Vehicle->GetDriverSeatTransform();
+    const FRotator StartRotation(0.0f, Seat.Rotator().Yaw + EnterAnimationStartYaw, 0.0f);
+    const FVector StartFeet = Seat.GetLocation()
+        - StartRotation.RotateVector(FVector(EnterAnimationSeatOffset.X, EnterAnimationSeatOffset.Y, 0.0f));
+
+    FVector StartLocation;
+    if (!FindVehicleStandSpot(Vehicle, StartFeet, StartLocation))
+    {
+        return 0.0f;
+    }
+
+    MulticastPlayEnterVehicle(StartLocation, StartRotation.Yaw, Seat.GetLocation().Z);
+    return GetVehicleAnimationDuration(EnterVehicleAnimation);
+}
+
+bool AGrandCityMobileCharacter::FindAnimatedVehicleExit(
+    const AGrandCityVehicle* Vehicle,
+    FVector& OutLocation,
+    FRotator& OutRotation) const
+{
+    if (!Vehicle || !ExitVehicleAnimation)
+    {
+        return false;
+    }
+
+    // The capsule must stand exactly under the pelvis at the moment the clip starts
+    // blending out (auto blend-out begins with VehicleMontageBlendTime of play time left),
+    // so the hand-off back to locomotion doesn't have to slide the body. Sample that
+    // from the clip; ExitAnimationEndOffset is only the fallback.
+    FVector SeatSpaceOffset(ExitAnimationEndOffset.X, ExitAnimationEndOffset.Y, 0.0f);
+    const double BlendOutStartTime = FMath::Max(
+        0.0, ExitVehicleAnimation->GetPlayLength() - VehicleMontageBlendTime * FMath::Max(VehicleAnimationPlayRate, 0.1f));
+    FVector PelvisComponent;
+    if (SampleComponentBoneLocation(ExitVehicleAnimation, TEXT("pelvis"), BlendOutStartTime, PelvisComponent))
+    {
+        // Mesh (component) space to the seat's actor-style space (X forward, Y right).
+        SeatSpaceOffset = DefaultMeshRelativeRotation.RotateVector(PelvisComponent);
+        SeatSpaceOffset.Z = 0.0f;
+    }
+
+    const FTransform Seat = Vehicle->GetDriverSeatTransform();
+    const FVector EndFeet = Seat.TransformPositionNoScale(SeatSpaceOffset);
+    if (!FindVehicleStandSpot(Vehicle, EndFeet, OutLocation))
+    {
+        return false;
+    }
+
+    OutRotation = FRotator(0.0f, Seat.Rotator().Yaw + ExitAnimationEndYaw, 0.0f);
+    return true;
+}
+
+float AGrandCityMobileCharacter::PlayExitVehicleAnimation(const AGrandCityVehicle* Vehicle)
+{
+    if (!HasAuthority() || !Vehicle || !ExitVehicleAnimation)
+    {
+        return 0.0f;
+    }
+
+    const FTransform Seat = Vehicle->GetDriverSeatTransform();
+    MulticastPlayExitVehicle(Seat.GetLocation(), Seat.Rotator().Yaw);
+    return GetVehicleAnimationDuration(ExitVehicleAnimation);
+}
+
+void AGrandCityMobileCharacter::CancelVehicleAnimation()
+{
+    if (HasAuthority())
+    {
+        MulticastCancelVehicleAnimation();
+    }
+}
+
+void AGrandCityMobileCharacter::MulticastPlayEnterVehicle_Implementation(
+    FVector_NetQuantize10 StartLocation,
+    float StartYaw,
+    float SeatHeight)
+{
+    BeginVehicleTransition(EGrandCityVehicleTransition::Entering);
+    VehicleSeatHeight = SeatHeight;
+
+    // Slide from wherever the player stood to the clip's start pose beside the door.
+    bVehicleAligning = true;
+    VehicleAlignElapsed = 0.0f;
+    VehicleAlignFromLocation = GetActorLocation();
+    VehicleAlignFromRotation = GetActorQuat();
+    VehicleAlignToLocation = StartLocation;
+    VehicleAlignToRotation = FRotator(0.0f, StartYaw, 0.0f).Quaternion();
+
+    // Hold the final seated pose until the server seats the character.
+    if (PlayVehicleMontage(EnterVehicleAnimation, false, VehicleMontageBlendTime) <= 0.0f && !HasAuthority())
+    {
+        EndVehicleTransition(true);
+    }
+}
+
+void AGrandCityMobileCharacter::MulticastPlayExitVehicle_Implementation(
+    FVector_NetQuantize10 SeatLocation,
+    float SeatYaw)
+{
+    if (!HasAuthority())
+    {
+        // The detach replication may still be in flight on this client.
+        DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+    }
+
+    BeginVehicleTransition(EGrandCityVehicleTransition::Exiting);
+    ExitSeatLocation = SeatLocation;
+    ExitSeatYaw = SeatYaw;
+    TickVehicleTransition(0.0f);
+
+    // The held seated pose is this clip's first frame, so swap to it without a blend.
+    SeatedMontage = nullptr;
+    const float Duration = PlayVehicleMontage(ExitVehicleAnimation, true, 0.0f);
+    if (Duration <= 0.0f)
+    {
+        FinishExitVehicleAnimation();
+        return;
+    }
+
+    // TickVehicleTransition hands control back once the clip has fully blended out
+    // (sliding the mesh root from the seat to the capsule meanwhile). The timer is
+    // only a fallback for machines that don't evaluate the animation.
+    GetWorldTimerManager().SetTimer(
+        VehicleTransitionTimer,
+        this,
+        &AGrandCityMobileCharacter::FinishExitVehicleAnimation,
+        Duration + VehicleMontageBlendTime,
+        false);
+}
+
+void AGrandCityMobileCharacter::MulticastCancelVehicleAnimation_Implementation()
+{
+    EndVehicleTransition(true);
+}
+
+void AGrandCityMobileCharacter::BeginVehicleTransition(EGrandCityVehicleTransition Transition)
+{
+    GetWorldTimerManager().ClearTimer(VehicleTransitionTimer);
+    VehicleTransition = Transition;
+    bVehicleAligning = false;
+    bExitHandOffAnchored = false;
+    // Forget any finished montage so the exit hand-off never reads a stale one.
+    ActiveVehicleMontage = nullptr;
+    bIsSprinting = false;
+    ForwardInputValue = 0.0f;
+    RightInputValue = 0.0f;
+    ConsumeMovementInputVector();
+
+    if (UCharacterMovementComponent* MovementComponent = GetCharacterMovement())
+    {
+        MovementComponent->StopMovementImmediately();
+        MovementComponent->DisableMovement();
+    }
+    SetActorEnableCollision(false);
+}
+
+void AGrandCityMobileCharacter::FinishExitVehicleAnimation()
+{
+    EndVehicleTransition(false);
+}
+
+void AGrandCityMobileCharacter::EndVehicleTransition(bool bStopMontage)
+{
+    GetWorldTimerManager().ClearTimer(VehicleTransitionTimer);
+    const EGrandCityVehicleTransition PreviousTransition = VehicleTransition;
+    VehicleTransition = EGrandCityVehicleTransition::None;
+    bVehicleAligning = false;
+
+    if (PreviousTransition == EGrandCityVehicleTransition::Exiting && GetMesh())
+    {
+        // The exit hand-off ends with the mesh root a couple of cm from its default spot
+        // (the idle pelvis isn't exactly over the root). Shift the capsule by that residual
+        // instead, so restoring the default mesh placement doesn't move the body.
+        const FVector DefaultRootLocation = GetActorLocation() + GetActorQuat().RotateVector(DefaultMeshRelativeLocation);
+        FVector Residual = GetMesh()->GetComponentLocation() - DefaultRootLocation;
+        Residual.Z = 0.0f;
+        constexpr float MaxResidual = 25.0f;
+        if (Residual.SizeSquared() < FMath::Square(MaxResidual))
+        {
+            AddActorWorldOffset(Residual, false, nullptr, ETeleportType::TeleportPhysics);
+        }
+    }
+
+    if (PreviousTransition != EGrandCityVehicleTransition::None)
+    {
+        RestoreDefaultMeshPlacement();
+    }
+
+    if (bStopMontage && ActiveVehicleMontage)
+    {
+        if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+        {
+            AnimInstance->Montage_Stop(0.0f, ActiveVehicleMontage);
+        }
+        ActiveVehicleMontage = nullptr;
+    }
+
+    if (PreviousTransition != EGrandCityVehicleTransition::None)
+    {
+        // Restores collision and walking unless the character is now seated.
+        ApplyOccupiedVehicleState();
+    }
+}
+
+void AGrandCityMobileCharacter::TickVehicleTransition(float DeltaSeconds)
+{
+    // Where the mesh root sits with the default offset: on the ground under the capsule.
+    const FVector DefaultRootLocation = GetActorLocation() + GetActorQuat().RotateVector(DefaultMeshRelativeLocation);
+
+    if (VehicleTransition == EGrandCityVehicleTransition::Entering)
+    {
+        if (bVehicleAligning)
+        {
+            VehicleAlignElapsed += DeltaSeconds;
+            const float Alpha = VehicleAlignDuration > KINDA_SMALL_NUMBER
+                ? FMath::Clamp(VehicleAlignElapsed / VehicleAlignDuration, 0.0f, 1.0f)
+                : 1.0f;
+            const float SmoothAlpha = FMath::SmoothStep(0.0f, 1.0f, Alpha);
+            SetActorLocationAndRotation(
+                FMath::Lerp(VehicleAlignFromLocation, VehicleAlignToLocation, SmoothAlpha),
+                FQuat::Slerp(VehicleAlignFromRotation, VehicleAlignToRotation, SmoothAlpha));
+            bVehicleAligning = Alpha < 1.0f;
+        }
+
+        // The clip assumes the seat is at ground level; lift the body to the real seat
+        // height while the character climbs in, so the final pose matches the seated pose.
+        const float StepAlpha = GetVehicleStepAlpha(EnterVehicleAnimation, EnterAnimationStepWindow);
+        const FVector GroundRoot = GetActorLocation() + GetActorQuat().RotateVector(DefaultMeshRelativeLocation);
+        SetMeshWorldPlacement(
+            GroundRoot + FVector(0.0f, 0.0f, (VehicleSeatHeight - GroundRoot.Z) * StepAlpha),
+            GetActorQuat() * DefaultMeshRelativeRotation.Quaternion());
+    }
+    else if (VehicleTransition == EGrandCityVehicleTransition::Exiting)
+    {
+        // The capsule already waits at the exit spot (so the camera doesn't jump when the
+        // clip ends) and the mesh root is pinned to the seat so the clip plays from inside
+        // the car. Re-evaluated every tick because clients may receive the capsule late.
+        const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+        const FAnimMontageInstance* MontageInstance = AnimInstance && ActiveVehicleMontage
+            ? AnimInstance->GetInstanceForMontage(ActiveVehicleMontage)
+            : nullptr;
+
+        if (ActiveVehicleMontage && !MontageInstance)
+        {
+            // Fully blended out: HandleBoneTransformsFinalized already stood the body
+            // over the capsule, so the default placement continues seamlessly.
+            FinishExitVehicleAnimation();
+            return;
+        }
+
+        if (MontageInstance && MontageInstance->IsStopped())
+        {
+            // Blending out: HandleBoneTransformsFinalized places the mesh after each pose
+            // evaluation, because this tick may run before or after the animation update.
+            return;
+        }
+
+        // Pinned to the seat, stepping down to the ground while the character climbs out.
+        const float StepAlpha = GetVehicleStepAlpha(ExitVehicleAnimation, ExitAnimationStepWindow);
+        FVector RootLocation = ExitSeatLocation;
+        RootLocation.Z = FMath::Lerp(ExitSeatLocation.Z, DefaultRootLocation.Z, StepAlpha);
+        SetMeshWorldPlacement(
+            RootLocation,
+            FRotator(0.0f, ExitSeatYaw + DefaultMeshRelativeRotation.Yaw, 0.0f).Quaternion());
+    }
+}
+
+void AGrandCityMobileCharacter::HandleBoneTransformsFinalized()
+{
+    if (VehicleTransition != EGrandCityVehicleTransition::Exiting || !ActiveVehicleMontage)
+    {
+        return;
+    }
+
+    USkeletalMeshComponent* MeshComponent = GetMesh();
+    const UAnimInstance* AnimInstance = MeshComponent ? MeshComponent->GetAnimInstance() : nullptr;
+    if (!AnimInstance)
+    {
+        return;
+    }
+
+    const FAnimMontageInstance* MontageInstance = AnimInstance->GetInstanceForMontage(ActiveVehicleMontage);
+    if (MontageInstance && !MontageInstance->IsStopped())
+    {
+        // Still playing: TickVehicleTransition keeps the root pinned to the seat.
+        return;
+    }
+
+    const int32 PelvisIndex = MeshComponent->GetBoneIndex(TEXT("pelvis"));
+    if (PelvisIndex == INDEX_NONE)
+    {
+        return;
+    }
+
+    // Hand-off. The clip has no root motion, so its last pose keeps the pelvis ~1.8 m from
+    // the animation root and turned 90 degrees, while locomotion keeps it over the root.
+    // Using the pose that was just evaluated, turn the mesh root with the blend weight and
+    // move it so the pelvis glides from where the clip left it to where it will rest once
+    // the default mesh placement is restored.
+    const FVector PelvisComponent = MeshComponent->GetBoneTransform(PelvisIndex, FTransform::Identity).GetLocation();
+    if (!bExitHandOffAnchored)
+    {
+        ExitHandOffPelvisAnchor = MeshComponent->GetComponentTransform().TransformPosition(PelvisComponent);
+        bExitHandOffAnchored = true;
+    }
+
+    const float HandOffAlpha = MontageInstance ? 1.0f - MontageInstance->GetWeight() : 1.0f;
+    const FQuat ActorRotation = GetActorQuat();
+    const FVector DefaultRootLocation = GetActorLocation() + ActorRotation.RotateVector(DefaultMeshRelativeLocation);
+    const FQuat DefaultRootRotation = ActorRotation * DefaultMeshRelativeRotation.Quaternion();
+    const FQuat SeatRootRotation = FRotator(0.0f, ExitSeatYaw + DefaultMeshRelativeRotation.Yaw, 0.0f).Quaternion();
+    const FQuat RootRotation = FQuat::Slerp(SeatRootRotation, DefaultRootRotation, HandOffAlpha);
+
+    // The pelvis comes to rest over the capsule: the idle pose keeps it within a few cm of
+    // the root. (It must not be derived from the pose being blended, whose pelvis is still
+    // up to ~1.8 m from the root mid-blend.)
+    const FVector PelvisTarget = FMath::Lerp(ExitHandOffPelvisAnchor, DefaultRootLocation, HandOffAlpha);
+    const FVector PelvisOffset = RootRotation.RotateVector(PelvisComponent);
+    // The idle pose's small pelvis offset leaves the root a couple of cm off its default
+    // spot when the blend completes; EndVehicleTransition absorbs that by moving the capsule.
+    SetMeshWorldPlacement(
+        FVector(PelvisTarget.X - PelvisOffset.X, PelvisTarget.Y - PelvisOffset.Y, DefaultRootLocation.Z),
+        RootRotation);
+}
+
+float AGrandCityMobileCharacter::GetVehicleStepAlpha(const UAnimSequence* Animation, const FVector2D& Window) const
+{
+    const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+    if (!Animation || !AnimInstance || !ActiveVehicleMontage)
+    {
+        return 0.0f;
+    }
+
+    const FAnimMontageInstance* MontageInstance = AnimInstance->GetInstanceForMontage(ActiveVehicleMontage);
+    if (!MontageInstance)
+    {
+        return 1.0f;
+    }
+
+    const float Fraction = MontageInstance->GetPosition() / FMath::Max(Animation->GetPlayLength(), KINDA_SMALL_NUMBER);
+    const float WindowStart = static_cast<float>(Window.X);
+    const float WindowEnd = FMath::Max(static_cast<float>(Window.Y), WindowStart + KINDA_SMALL_NUMBER);
+    return FMath::SmoothStep(WindowStart, WindowEnd, Fraction);
+}
+
+void AGrandCityMobileCharacter::SetMeshWorldPlacement(const FVector& RootLocation, const FQuat& RootRotation)
+{
+    USkeletalMeshComponent* MeshComponent = GetMesh();
+    if (!MeshComponent)
+    {
+        return;
+    }
+
+    const FQuat ActorRotation = GetActorQuat();
+    const FVector RelativeLocation = ActorRotation.UnrotateVector(RootLocation - GetActorLocation());
+    const FRotator RelativeRotation = (ActorRotation.Inverse() * RootRotation).Rotator();
+    MeshComponent->SetRelativeLocationAndRotation(RelativeLocation, RelativeRotation);
+    // Network smoothing on simulated proxies re-applies this base offset every frame.
+    CacheInitialMeshOffset(RelativeLocation, RelativeRotation);
+}
+
+void AGrandCityMobileCharacter::RestoreDefaultMeshPlacement()
+{
+    if (USkeletalMeshComponent* MeshComponent = GetMesh())
+    {
+        MeshComponent->SetRelativeLocationAndRotation(DefaultMeshRelativeLocation, DefaultMeshRelativeRotation);
+        CacheInitialMeshOffset(DefaultMeshRelativeLocation, DefaultMeshRelativeRotation);
+    }
+}
+
+void AGrandCityMobileCharacter::PlaySeatedPose()
+{
+    UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+    if (!AnimInstance || !ExitVehicleAnimation
+        || (SeatedMontage && AnimInstance->Montage_IsActive(SeatedMontage)))
+    {
+        return;
+    }
+
+    // No blend-in: this replaces the enter clip's final (seated) frame, and blending two
+    // poses whose roots sit in different places would slide the body around.
+    UAnimMontage* Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage(
+        ExitVehicleAnimation, CrouchAnimationSlotName, 0.0f, VehicleMontageBlendTime, 1.0f, 1);
+    if (!Montage)
+    {
+        return;
+    }
+
+    Montage->bEnableAutoBlendOut = false;
+    if (AnimInstance->Montage_Play(Montage) <= 0.0f)
+    {
+        return;
+    }
+
+    AnimInstance->Montage_Pause(Montage);
+    ActiveCrouchMontage = nullptr;
+    ActiveCrouchAnimation = nullptr;
+    ActiveVehicleMontage = nullptr;
+    SeatedMontage = Montage;
+}
+
+void AGrandCityMobileCharacter::StopSeatedPose()
+{
+    if (!SeatedMontage)
+    {
+        return;
+    }
+
+    if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+    {
+        AnimInstance->Montage_Stop(VehicleMontageBlendTime, SeatedMontage);
+    }
+    SeatedMontage = nullptr;
+}
+
+float AGrandCityMobileCharacter::PlayVehicleMontage(UAnimSequence* Animation, bool bAutoBlendOut, float BlendInTime)
+{
+    UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+    if (!AnimInstance || !Animation)
+    {
+        return 0.0f;
+    }
+
+    UAnimMontage* Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage(
+        Animation,
+        CrouchAnimationSlotName,
+        BlendInTime,
+        VehicleMontageBlendTime,
+        1.0f,
+        1);
+    if (!Montage)
+    {
+        return 0.0f;
+    }
+
+    Montage->bEnableAutoBlendOut = bAutoBlendOut;
+    // CreateSlotAnimationAsDynamicMontage ignores its play-rate argument (UE 5.8), so the
+    // rate must go to Montage_Play; the enter/exit timers assume this exact duration.
+    if (AnimInstance->Montage_Play(Montage, FMath::Max(VehicleAnimationPlayRate, 0.1f)) <= 0.0f)
+    {
+        return 0.0f;
+    }
+
+    // Montage_Play replaced any crouch montage in the shared slot.
+    ActiveCrouchMontage = nullptr;
+    ActiveCrouchAnimation = nullptr;
+    ActiveVehicleMontage = Montage;
+    return GetVehicleAnimationDuration(Animation);
+}
+
+float AGrandCityMobileCharacter::GetVehicleAnimationDuration(const UAnimSequence* Animation) const
+{
+    return Animation ? Animation->GetPlayLength() / FMath::Max(VehicleAnimationPlayRate, 0.1f) : 0.0f;
+}
+
+bool AGrandCityMobileCharacter::FindVehicleStandSpot(
+    const AGrandCityVehicle* Vehicle,
+    const FVector& DesiredFeetLocation,
+    FVector& OutActorLocation) const
+{
+    const UWorld* World = GetWorld();
+    const UCapsuleComponent* Capsule = GetCapsuleComponent();
+    if (!World || !Capsule || !Vehicle)
+    {
+        return false;
+    }
+
+    const float Radius = Capsule->GetScaledCapsuleRadius();
+    const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+    FCollisionQueryParams Params(SCENE_QUERY_STAT(GrandCityVehicleStandSpot), false, this);
+
+    // Needs real floor under it; the car's own roof or hood doesn't count.
+    FHitResult FloorHit;
+    const FVector TraceStart = DesiredFeetLocation + FVector(0.0f, 0.0f, HalfHeight * 2.0f);
+    const FVector TraceEnd = DesiredFeetLocation - FVector(0.0f, 0.0f, 150.0f);
+    if (!World->LineTraceSingleByChannel(FloorHit, TraceStart, TraceEnd, ECC_Pawn, Params)
+        || FloorHit.GetActor() == Vehicle)
+    {
+        return false;
+    }
+
+    const FVector ActorLocation = FloorHit.ImpactPoint + FVector(0.0f, 0.0f, HalfHeight + 2.0f);
+    if (World->OverlapBlockingTestByChannel(
+        ActorLocation, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(Radius, HalfHeight), Params))
+    {
+        return false;
+    }
+
+    // The clip walks straight between the seat and this spot, so no wall may be in between.
+    FCollisionQueryParams SightParams(Params);
+    SightParams.AddIgnoredActor(Vehicle);
+    const FVector SeatLocation = Vehicle->GetDriverSeatTransform().GetLocation() + FVector(0.0f, 0.0f, HalfHeight);
+    FHitResult WallHit;
+    if (World->LineTraceSingleByChannel(WallHit, SeatLocation, ActorLocation, ECC_Pawn, SightParams))
+    {
+        return false;
+    }
+
+    OutActorLocation = ActorLocation;
+    return true;
 }
 
 void AGrandCityMobileCharacter::MoveForward(float Value)
@@ -300,7 +887,8 @@ void AGrandCityMobileCharacter::LookUp(float Value)
 void AGrandCityMobileCharacter::StartSprint()
 {
     const UCharacterMovementComponent* MovementComponent = GetCharacterMovement();
-    if (bIsSprinting || bIsCrouched || (MovementComponent && MovementComponent->bWantsToCrouch))
+    if (bIsSprinting || bIsCrouched || (MovementComponent && MovementComponent->bWantsToCrouch)
+        || IsInVehicleTransition())
     {
         return;
     }
@@ -386,6 +974,11 @@ void AGrandCityMobileCharacter::OnEndCrouch(float HalfHeightAdjust, float Scaled
 
 void AGrandCityMobileCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    GetWorldTimerManager().ClearTimer(VehicleTransitionTimer);
+    if (USkeletalMeshComponent* MeshComponent = GetMesh())
+    {
+        MeshComponent->UnregisterOnBoneTransformsFinalizedDelegate(BoneTransformsFinalizedHandle);
+    }
     GetWorldTimerManager().ClearTimer(CrouchAnimationTimer);
     GetWorldTimerManager().ClearTimer(CrouchMovementPauseTimer);
     Super::EndPlay(EndPlayReason);
@@ -417,7 +1010,7 @@ void AGrandCityMobileCharacter::ToggleSprint()
 void AGrandCityMobileCharacter::ToggleCrouch()
 {
     UCharacterMovementComponent* MovementComponent = GetCharacterMovement();
-    if (!MovementComponent)
+    if (!MovementComponent || IsInVehicleTransition())
     {
         return;
     }

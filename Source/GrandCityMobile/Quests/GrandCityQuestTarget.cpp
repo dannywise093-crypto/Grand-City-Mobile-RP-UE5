@@ -6,6 +6,7 @@
 #include "Components/TextRenderComponent.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Controller.h"
+#include "Materials/MaterialInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
@@ -44,6 +45,24 @@ AGrandCityQuestTarget::AGrandCityQuestTarget()
     Label->SetVerticalAlignment(EVRTA_TextCenter);
     Label->SetWorldSize(32.0f);
     Label->SetTextRenderColor(FColor(40, 200, 255));
+
+    Beacon = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Beacon"));
+    Beacon->SetupAttachment(RadiusSphere);
+    Beacon->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
+    Beacon->SetCanEverAffectNavigation(false);
+    Beacon->CastShadow = false;
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+    if (CylinderMesh.Succeeded())
+    {
+        Beacon->SetStaticMesh(CylinderMesh.Object);
+    }
+    // Translucent unlit; colour and opacity come from custom primitive data 0-3 and 4.
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> BeaconMaterial(
+        TEXT("/Game/Quests/Materials/M_QuestBeacon.M_QuestBeacon"));
+    if (BeaconMaterial.Succeeded())
+    {
+        Beacon->SetMaterial(0, BeaconMaterial.Object);
+    }
 }
 
 void AGrandCityQuestTarget::OnConstruction(const FTransform& Transform)
@@ -59,6 +78,15 @@ void AGrandCityQuestTarget::OnConstruction(const FTransform& Transform)
     if (Label)
     {
         Label->SetText(GetDisplayName());
+    }
+    if (Beacon)
+    {
+        // Engine cylinder: 100 cm wide and tall, centred. Stand it on the target, as wide as its reach.
+        Beacon->SetWorldLocationAndRotation(
+            GetActorLocation() + GetActorUpVector() * (BeaconHeight * 0.5f), GetActorQuat());
+        Beacon->SetWorldScale3D(FVector(Radius * 2.0f / 100.0f, Radius * 2.0f / 100.0f, BeaconHeight / 100.0f));
+        Beacon->SetDefaultCustomPrimitiveDataVector4(0, FVector4(1.0f, 0.45f, 0.0f, 1.0f));
+        Beacon->SetDefaultCustomPrimitiveDataFloat(4, BeaconOpacity);
     }
 }
 
@@ -176,5 +204,9 @@ void AGrandCityQuestTarget::RefreshVisuals()
     if (Label)
     {
         Label->SetHiddenInGame(bDestroyed || !bLocallyActive);
+    }
+    if (Beacon)
+    {
+        Beacon->SetHiddenInGame(bDestroyed || !bLocallyActive);
     }
 }

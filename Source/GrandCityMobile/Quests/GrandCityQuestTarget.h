@@ -74,6 +74,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Quest Target|Destroy", meta=(ClampMin="0.0", Units="s"))
     float RespawnDelaySeconds = 30.0f;
 
+    /** Height of the orange beacon shown while the local player's quest needs this target. Its width is the Radius. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Quest Target|Beacon", meta=(ClampMin="10.0", Units="cm"))
+    float BeaconHeight = 5000.0f;
+
+    /** 0 = invisible, 1 = solid. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Quest Target|Beacon", meta=(ClampMin="0.0", ClampMax="1.0"))
+    float BeaconOpacity = 0.4f;
+
 protected:
     virtual void OnConstruction(const FTransform& Transform) override;
     virtual void BeginPlay() override;
@@ -96,6 +104,10 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Quest Target")
     TObjectPtr<UTextRenderComponent> Label;
+
+    /** Tall translucent tube (GTA style) marking the target from afar; sized in OnConstruction. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Quest Target")
+    TObjectPtr<UStaticMeshComponent> Beacon;
 
     UPROPERTY(ReplicatedUsing=OnRep_Destroyed, BlueprintReadOnly, Category="Quest Target")
     bool bDestroyed = false;

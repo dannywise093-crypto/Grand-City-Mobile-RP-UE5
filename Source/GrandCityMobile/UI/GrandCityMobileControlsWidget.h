@@ -14,7 +14,8 @@ enum class EGrandCityVehicleControl : uint8
     Brake,
     Reverse,
     SteerLeft,
-    SteerRight
+    SteerRight,
+    Boost
 };
 
 DECLARE_DELEGATE_TwoParams(FGrandCityVehicleControlDelegate, EGrandCityVehicleControl, bool /* bPressed */);
@@ -46,6 +47,7 @@ public:
     FSimpleDelegate OnEnterVehiclePressed;
     FSimpleDelegate OnExitVehiclePressed;
     FSimpleDelegate OnQuestInteractPressed;
+    FSimpleDelegate OnVehicleInteractPressed;
     FGrandCityVehicleControlDelegate OnVehicleControlChanged;
 
     void ShowFeedback(const FText& FeedbackText);
@@ -57,6 +59,10 @@ public:
     void SetEnterVehicleAvailable(bool bAvailable);
     /** Shows the quest button (QUEST / USE / DESTROY) while a quest action is in reach. */
     void SetQuestInteractAvailable(bool bAvailable, const FText& Label);
+    /** Shows the driving interact button (WORKSHOP) while the car is parked at a vehicle workshop. */
+    void SetVehicleInteractAvailable(bool bAvailable, const FText& Label);
+    /** Shows the BOOST button while driving a car with nitro. */
+    void SetBoostAvailable(bool bAvailable);
 
 protected:
     virtual void NativeOnInitialized() override;
@@ -72,6 +78,7 @@ private:
         bool bHoldButton = false);
 
     void RefreshButtonVisibility();
+    static void SetButtonLabel(UButton* Button, const FText& Label);
 
     UFUNCTION()
     void HandleRunPressed();
@@ -121,6 +128,15 @@ private:
     UFUNCTION()
     void HandleSteerRightReleased();
 
+    UFUNCTION()
+    void HandleBoostPressed();
+
+    UFUNCTION()
+    void HandleBoostReleased();
+
+    UFUNCTION()
+    void HandleVehicleInteractPressed();
+
     UPROPERTY(Transient)
     TObjectPtr<UTextBlock> FeedbackLabel;
 
@@ -139,6 +155,12 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UButton> QuestInteractButton;
 
+    UPROPERTY(Transient)
+    TObjectPtr<UButton> VehicleInteractButton;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UButton> BoostButton;
+
     /** On-foot buttons (RUN, JUMP, CROUCH). */
     UPROPERTY(Transient)
     TArray<TObjectPtr<UButton>> CharacterButtons;
@@ -150,4 +172,6 @@ private:
     bool bVehicleMode = false;
     bool bEnterVehicleAvailable = false;
     bool bQuestInteractAvailable = false;
+    bool bVehicleInteractAvailable = false;
+    bool bBoostAvailable = false;
 };

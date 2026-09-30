@@ -65,9 +65,20 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Quest|Flow")
     bool bAutoRestartOnFail = false;
 
+    /** Height of the beacon tube over the trigger area (red for quests, yellow for minigames). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Quest|Beacon", meta=(ClampMin="10.0", Units="cm"))
+    float BeaconHeight = 300.0f;
+
+    /** 0 = invisible, 1 = solid. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Quest|Beacon", meta=(ClampMin="0.0", ClampMax="1.0"))
+    float BeaconOpacity = 0.4f;
+
 protected:
     virtual void OnConstruction(const FTransform& Transform) override;
     virtual void BeginPlay() override;
+
+    /** Fits the beacon tube to the trigger area and colours it by quest/minigame. */
+    void UpdateBeacon();
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Quest")
     TObjectPtr<USceneComponent> Root;
@@ -76,7 +87,7 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Quest")
     TObjectPtr<UBoxComponent> TriggerArea;
 
-    /** Visual marker; replace the mesh/material freely. */
+    /** Translucent beacon tube (GTA style) filling the trigger area; sized by UpdateBeacon. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Quest")
     TObjectPtr<UStaticMeshComponent> Marker;
 

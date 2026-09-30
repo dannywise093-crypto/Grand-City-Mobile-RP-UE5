@@ -54,6 +54,7 @@ public:
     /** Answers the open offer window (Y / U keys). Returns false when no offer is open. */
     bool AcceptLocalOffer();
     bool DeclineLocalOffer();
+    bool IsOfferOpen() const { return OfferWidget != nullptr; }
     void RefreshLocalVisuals();
 
     // --- Server ------------------------------------------------------------------------------

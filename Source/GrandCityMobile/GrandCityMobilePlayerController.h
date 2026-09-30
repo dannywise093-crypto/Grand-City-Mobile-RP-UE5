@@ -9,6 +9,7 @@
 
 class UGrandCityPlayerProfileComponent;
 class UGrandCityQuestComponent;
+class UGrandCityVehicleUpgradeComponent;
 class UGrandCityMobileControlsWidget;
 class SGrandCityVirtualJoystick;
 class SVirtualJoystick;
@@ -75,13 +76,22 @@ private:
     void HandleJumpFeedbackExpired();
     void HandleCrouchButtonPressed();
 
-    /** E key / EXIT button: leave the current vehicle, else a quest action, else enter the nearby vehicle. */
+    /**
+     * E key: while driving, open the workshop the car is parked in, else leave the vehicle;
+     * on foot, a quest action, else enter the nearby vehicle.
+     */
     void HandleInteractPressed();
+    /** EXIT button: always leaves the vehicle, even at a workshop. */
+    void ExitCurrentVehicle();
+    /** WORKSHOP button: vehicle workshop only. */
+    void HandleVehicleUpgradeInteractPressed();
     /** ENTER button: vehicles only, so it never opens a quest while standing next to a car. */
     void EnterNearbyVehicle();
+    /** Server only. Seats the character and possesses the vehicle once the enter animation ends. */
+    void FinishEnterVehicle();
     /** QUEST / USE / DESTROY button: quest actions only. */
     void HandleQuestInteractPressed();
-    /** Y / U keys: accept or decline the open quest offer window. */
+    /** Y / U keys: accept / decline the open quest offer, or accept / go back in the workshop window. */
     void HandleQuestAcceptPressed();
     void HandleQuestDeclinePressed();
     void HandleVehicleControlChanged(EGrandCityVehicleControl Control, bool bPressed);
@@ -96,6 +106,9 @@ private:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Grand City|Quest", meta=(AllowPrivateAccess="true"))
     TObjectPtr<UGrandCityQuestComponent> QuestComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Grand City|Vehicle", meta=(AllowPrivateAccess="true"))
+    TObjectPtr<UGrandCityVehicleUpgradeComponent> VehicleUpgradeComponent;
 
     UPROPERTY(Transient)
     TObjectPtr<UGrandCityMobileControlsWidget> MobileControlsWidget;
@@ -120,10 +133,14 @@ private:
 
     TWeakObjectPtr<AGrandCityVehicle> NearbyVehicle;
     FTimerHandle VehicleInteractionTimer;
+    /** Server only. Vehicle reserved while the enter animation plays. */
+    TWeakObjectPtr<AGrandCityVehicle> PendingEnterVehicle;
+    FTimerHandle VehicleEnterTimer;
     bool bVehicleControlsActive = false;
     bool bTouchForwardHeld = false;
     bool bTouchReverseHeld = false;
     bool bTouchBrakeHeld = false;
     bool bTouchSteerLeftHeld = false;
     bool bTouchSteerRightHeld = false;
+    bool bTouchBoostHeld = false;
 };
