@@ -29,3 +29,4 @@
 /Backend/.env
 /Backend/.env.*
 !/Backend/.env.example
+.vsconfig

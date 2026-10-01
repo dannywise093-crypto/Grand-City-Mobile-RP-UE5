@@ -4,6 +4,7 @@
     "Component.Unreal.Debugger",
     "Component.Unreal.Ide",
     "Microsoft.Net.Component.4.6.2.TargetingPack",
+    "Microsoft.Net.Component.4.8.SDK",
     "Microsoft.VisualStudio.Component.VC.14.50.18.0.ATL",
     "Microsoft.VisualStudio.Component.VC.14.50.18.0.x86.x64",
     "Microsoft.VisualStudio.Component.VC.Llvm.Clang",
