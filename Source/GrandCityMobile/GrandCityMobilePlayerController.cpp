@@ -748,7 +748,11 @@ void AGrandCityMobilePlayerController::AutoManageActiveCameraTarget(AActor* Sugg
         && (Cast<AGrandCityVehicle>(SuggestedTarget) || Cast<AGrandCityVehicle>(CurrentViewTarget));
     if (bVehicleSwap)
     {
-        SetViewTargetWithBlend(SuggestedTarget, 0.45f, VTBlend_EaseInOut, 2.0f);
+        // Entering: the character is seated (teleported into the cabin) in the same frame
+        // the blend starts, so its live camera would collide with the car body and show the
+        // interior. Lock the outgoing view to its last frame, still outside the car.
+        const bool bEnteringVehicle = Cast<AGrandCityVehicle>(SuggestedTarget) != nullptr;
+        SetViewTargetWithBlend(SuggestedTarget, 0.45f, VTBlend_EaseInOut, 2.0f, bEnteringVehicle);
         return;
     }
 
